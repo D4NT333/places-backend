@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { getPlaces } from "../controllers/places.controller.js";
+import { searchNearby } from "../controllers/places.controller.js";
 
 const router = Router();
 
-router.get("/places", getPlaces);
+router.get("/searchNearby", searchNearby);
 
 export default router;

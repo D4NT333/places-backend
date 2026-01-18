@@ -1,23 +1,19 @@
-import { db } from "../config/firebase.js";
+import { searchNearbyService } from "../services/places.services.js";
 
-export async function getPlaces(req, res) {
+export async function searchNearby(req, res) {
   try {
-    const snapshot = await db.collection("lugares").get();
+    const lat = Number(req.query.lat ?? 20.6736);
+    const lng = Number(req.query.lng ?? -103.344);
+    const radius = Number(req.query.radius ?? 1000);
 
-    const places = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    if (Number.isNaN(lat) || Number.isNaN(lng) || Number.isNaN(radius)) {
+      return res.status(400).json({ error: "Invalid query params" });
+    }
 
-    res.json({
-      ok: true,
-      places,
-    });
-  } catch (error) {
-    console.error("🔥 Firestore error:", error);
-    res.status(500).json({
-      ok: false,
-      message: "Error leyendo lugares",
-    });
+    const data = await searchNearbyService({ lat, lng, radius });
+
+    return res.json(data);
+  } catch (err) {
+    return res.status(500).json({ error: "Server error", details: String(err) });
   }
 }

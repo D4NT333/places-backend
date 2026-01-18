@@ -7,10 +7,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get("/ping", (req, res) => {
-  res.json({ ok: true, message: "pong 🏓" });
-});
-
-app.use("/api", placesRoutes);
+app.use("/api/places", placesRoutes);
 
 export default app;
+
