@@ -1,4 +1,5 @@
 import admin from "firebase-admin";
+import "dotenv/config";
 
 const {
   FIREBASE_PROJECT_ID,
@@ -20,6 +21,6 @@ if (!admin.apps.length) {
   });
 }
 
-const db = admin.firestore();
-
-export { db };
+export const firebaseAdmin = admin;
+export const db = admin.firestore();
+export const FieldValue = admin.firestore.FieldValue;
