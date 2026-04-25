@@ -3,7 +3,7 @@ import cors from "cors";
 import placesRoutes from "../routes/places/places.routes.js";
 import feedRoutes from "../routes/feed/feed.routes.js";
 import authenticationRoutes from "../routes/authentication/authentication.routes.js";
-import placeSubmissionRoutes from "../routes/submissions/submissions.routes.js";
+import placeSubmissionRoutes from "../routes/submissions/placeSubmissions.routes.js";
 
 const app = express();
 
