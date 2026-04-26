@@ -117,13 +117,11 @@ export default async function listPlaceSubmissionsService({
 
   const items = submissions.map((submission) => {
     const user = usersMap[submission.createdBy];
-
     return {
       id: submission.id,
       placeSubmissionId: submission.placeSubmissionId || submission.id,
 
       name: submission.name || "Lugar sin nombre",
-      description: submission.description || "",
       status: submission.status || "unknown",
       createdAt: formatTimestamp(submission.createdAt),
 
@@ -135,8 +133,6 @@ export default async function listPlaceSubmissionsService({
 
       reviewCycle: submission.reviewCycle || 1,
       wasReturnedBefore: Boolean(submission.wasReturnedBefore),
-
-      rawStatus: submission.status || null,
     };
   });
 
