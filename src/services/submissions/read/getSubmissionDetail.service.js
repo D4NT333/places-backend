@@ -90,7 +90,9 @@ export default async function getSubmissionDetailService({ submissionId }) {
     photos: Array.isArray(submission.photos) ? submission.photos : [],
     location: submission.location || null,
 
-    category: submission.category || null,
+    tagId: submission.tagId || null,
+    tagLabel: submission.tagLabel || null,
+    
     subtags: Array.isArray(submission.subtags) ? submission.subtags : [],
     focuses: Array.isArray(submission.focuses) ? submission.focuses : [],
 
