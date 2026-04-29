@@ -94,7 +94,7 @@ export default async function getSubmissionDetailService({ submissionId }) {
     tagLabel: submission.tagLabel || null,
     
     subtags: Array.isArray(submission.subtags) ? submission.subtags : [],
-    focuses: Array.isArray(submission.focuses) ? submission.focuses : [],
+    approaches: Array.isArray(submission.approaches) ? submission.approaches : [],
 
     price: submission.price || null,
 
