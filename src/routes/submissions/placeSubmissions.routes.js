@@ -2,6 +2,9 @@ import { Router } from "express";
 import createPlaceSubmissionController from "../../controllers/submissions/create/createPlaceSubmission.controller.js";
 import listPlaceSubmissionsController from "../../controllers/submissions/read/listPlaceSubmissions.controller.js";
 import getSubmissionDetailController from "../../controllers/submissions/read/getSubmissionDetail.controller.js";
+import getMyPlaceSubmissionsController from "../../controllers/submissions/read/getMyPlaceSubmissions.controller.js";
+
+import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
 
 const router = Router();
 
@@ -10,5 +13,7 @@ router.post("/place-submissions", createPlaceSubmissionController);
 router.get("/admin/place-submissions", listPlaceSubmissionsController);
 
 router.get("/admin/place-submissions/:submissionId",getSubmissionDetailController);
+
+router.get("/place-submissions/my-places",verifyFirebaseToken,getMyPlaceSubmissionsController);
 
 export default router;
