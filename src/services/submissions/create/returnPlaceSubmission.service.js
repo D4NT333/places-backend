@@ -11,11 +11,38 @@ const RETURN_FIELD_KEYS = [
   "price",
 ];
 
+function normalizePhotoItems(photoItems = []) {
+  if (!Array.isArray(photoItems)) return [];
+
+  return photoItems.map((photo, index) => ({
+    index: typeof photo.index === "number" ? photo.index : index,
+
+    url: typeof photo.url === "string" ? photo.url : "",
+
+    selected: Boolean(photo.selected),
+
+    message:
+      typeof photo.message === "string" ? photo.message.trim() : "",
+  }));
+}
+
 function normalizeReturnFields(fields = {}) {
   const normalized = {};
 
   RETURN_FIELD_KEYS.forEach((fieldKey) => {
     const field = fields[fieldKey] || {};
+
+    if (fieldKey === "photos") {
+      const items = normalizePhotoItems(field.items);
+
+      normalized.photos = {
+        selected: items.some((photo) => photo.selected),
+        message: typeof field.message === "string" ? field.message.trim() : "",
+        items,
+      };
+
+      return;
+    }
 
     normalized[fieldKey] = {
       selected: Boolean(field.selected),
