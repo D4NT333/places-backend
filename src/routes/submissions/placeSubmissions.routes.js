@@ -5,6 +5,7 @@ import getSubmissionDetailController from "../../controllers/submissions/read/ge
 import getMyPlaceSubmissionsController from "../../controllers/submissions/read/getMyPlaceSubmissions.controller.js";
 import getMyPlaceSubmissionDetailController from "../../controllers/submissions/read/getMyPlaceSubmissionDetail.controller.js";
 import returnPlaceSubmissionController from "../../controllers/submissions/create/returnPlaceSubmission.controller.js";
+import getReturnedPlaceSubmissionEditDataController from "../../controllers/submissions/read/getReturnedPlaceSubmissionEditData.controller.js";
 
 import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
 
@@ -21,5 +22,7 @@ router.get("/place-submissions/my-places",verifyFirebaseToken,getMyPlaceSubmissi
 router.get("/place-submissions/my-places/:submissionId",verifyFirebaseToken,getMyPlaceSubmissionDetailController);
 
 router.post("/admin/place-submissions/:submissionId/return", returnPlaceSubmissionController);
+
+router.get("/place-submissions/my-places/returned/:submissionId/edit",verifyFirebaseToken,getReturnedPlaceSubmissionEditDataController);
 
 export default router;
