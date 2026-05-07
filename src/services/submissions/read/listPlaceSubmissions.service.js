@@ -6,6 +6,7 @@ const VALID_STATUSES = [
   "in_review",
   "approved",
   "returned",
+  "resubmitted",
   "rejected",
 ];
 
