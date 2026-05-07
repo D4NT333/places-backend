@@ -13,7 +13,7 @@ export default async function resubmitReturnedPlaceSubmissionController(req, res
 
     return res.status(200).json({
       ok: true,
-      message: "Payload de reenvío recibido correctamente.",
+      message: "Propuesta reenviada correctamente.",
       data: result,
     });
   } catch (error) {
@@ -21,7 +21,7 @@ export default async function resubmitReturnedPlaceSubmissionController(req, res
 
     return res.status(error.statusCode || 500).json({
       ok: false,
-      message: error.message || "Error al recibir el reenvío de propuesta.",
+      message: error.message || "Error al reenviar la propuesta.",
     });
   }
 }
