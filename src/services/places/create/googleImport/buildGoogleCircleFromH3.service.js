@@ -1,10 +1,11 @@
 import {
   isValidCell,
+  getResolution,
   cellToLatLng,
   cellToBoundary,
 } from "h3-js";
 
-export async function discoverPlacesByH3Service(hexId) {
+export default function buildGoogleCircleFromH3Service(hexId) {
   if (!hexId) {
     throw new Error("hexId is required");
   }
@@ -13,7 +14,8 @@ export async function discoverPlacesByH3Service(hexId) {
     throw new Error("Invalid H3 hexId");
   }
 
-  // 1. Centro del hex
+  const resolution = getResolution(hexId);
+
   const [centerLat, centerLng] = cellToLatLng(hexId);
 
   const center = {
@@ -21,48 +23,34 @@ export async function discoverPlacesByH3Service(hexId) {
     longitude: centerLng,
   };
 
-  // 2. Vértices del hex
-  const boundaryRaw = cellToBoundary(hexId);
-
-  const boundary = boundaryRaw.map(([lat, lng]) => ({
+  const boundary = cellToBoundary(hexId).map(([lat, lng]) => ({
     latitude: lat,
     longitude: lng,
   }));
 
-  // 3. Calcular radio:
-  // distancia máxima del centro a cualquiera de los vértices
   const distances = boundary.map((point) =>
     haversineDistanceMeters(center, point)
   );
 
   const radiusMeters = Math.ceil(Math.max(...distances));
 
-  // 4. Armar círculo para Google Places New
   const circle = {
-    center: {
-      latitude: center.latitude,
-      longitude: center.longitude,
-    },
+    center,
     radius: radiusMeters,
   };
 
-
   return {
     hexId,
+    resolution,
     center,
     boundary,
     radiusMeters,
     circle,
-    status: "ok",
   };
 }
 
-/**
- * Calcula distancia entre dos coordenadas usando Haversine
- * Retorna metros
- */
 function haversineDistanceMeters(pointA, pointB) {
-  const R = 6371000; // radio de la Tierra en metros
+  const R = 6371000;
 
   const lat1 = toRadians(pointA.latitude);
   const lat2 = toRadians(pointB.latitude);

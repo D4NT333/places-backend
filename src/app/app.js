@@ -10,7 +10,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.use("/api/places/add", placesRoutes);
+app.use("/api/places", placesRoutes);
 
 app.use("/api/feed", feedRoutes);
 
