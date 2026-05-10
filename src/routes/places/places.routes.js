@@ -3,6 +3,7 @@ import discoverPlacesByH3Controller from "../../controllers/places/discoverPlace
 import getCreateCatalogController from "../../controllers/places/getCreateCatalog.controller.js";
 import listGooglePlaceCandidatesController from "../../controllers/places/listGooglePlaceCandidates.controller.js";
 import getGoogleCandidatesSummaryController from "../../controllers/places/getGoogleCandidatesSummary.controller.js";
+import getGooglePlaceCandidateDetailsController from "../../controllers/places/getGooglePlaceCandidateDetails.controller.js";
 
 const router = Router();
 
@@ -17,5 +18,7 @@ router.get("/admin/create-catalog", getCreateCatalogController);
 router.get("/admin/google-places/candidates",listGooglePlaceCandidatesController);
 
 router.get("/admin/google-places/candidates-summary",getGoogleCandidatesSummaryController);
+
+router.get("/admin/google-places/candidates/:googlePlaceId/details",getGooglePlaceCandidateDetailsController);
 
 export default router;  
