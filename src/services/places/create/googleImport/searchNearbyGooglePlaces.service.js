@@ -4,14 +4,7 @@ const FIELD_MASK = [
   "places.id",
   "places.displayName",
   "places.formattedAddress",
-  "places.location",
   "places.types",
-  "places.primaryType",
-  "places.rating",
-  "places.userRatingCount",
-  "places.priceLevel",
-  "places.googleMapsUri",
-  "places.photos",
 ].join(",");
 
 export default async function searchNearbyGooglePlacesService({ circle }) {
@@ -28,6 +21,8 @@ export default async function searchNearbyGooglePlacesService({ circle }) {
       circle,
     },
   };
+
+  console.log("Se ejecuto Google Places");
 
   const response = await fetch(googleConfig.places.searchNearbyEndpoint, {
     method: "POST",
