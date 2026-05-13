@@ -4,10 +4,14 @@ import getAdminMeController from "../../controllers/authentication/getAdminMe.co
 
 import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
 
+import {registerEmailUserController} from "../../controllers/authentication/registerEmailUser.controller.js";
+
 const router = Router();
 
 router.post("/session", createSessionController);
 
 router.get("/admin/me", verifyFirebaseToken, getAdminMeController);
+
+router.post("/register/email", registerEmailUserController);
 
 export default router;
