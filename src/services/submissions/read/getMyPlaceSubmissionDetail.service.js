@@ -104,6 +104,7 @@ function mapSubmissionDetail(doc) {
     tagLabel: data.tagLabel || "Sin categoría",
 
     subtags: Array.isArray(data.subtags) ? data.subtags : [],
+    approaches: Array.isArray(data.approaches) ? data.approaches : [],
 
     status: data.status || "in_review",
     source: data.source || null,

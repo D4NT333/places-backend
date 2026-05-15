@@ -51,6 +51,7 @@ function mapSubmissionDoc(doc) {
     tag: data.tagLabel || "Sin categoría",
 
     subtags: Array.isArray(data.subtags) ? data.subtags : [],
+    approaches: Array.isArray(data.approaches) ? data.approaches : [],
 
     price: data.price || null,
     status: data.status || "in_review",
