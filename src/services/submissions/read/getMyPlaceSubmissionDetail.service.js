@@ -1,5 +1,13 @@
 import { db } from "../../../config/firebase.js";
 
+const DEFAULT_OPENING_HOURS = {
+  type: "not_specified",
+  days: [],
+  openTime: null,
+  closeTime: null,
+  label: "Horario no especificado",
+};
+
 function formatFirestoreDate(value) {
   if (!value) return null;
 
@@ -12,6 +20,46 @@ function formatFirestoreDate(value) {
   }
 
   return value;
+}
+
+function normalizeOpeningHours(openingHours) {
+  if (!openingHours || typeof openingHours !== "object") {
+    return DEFAULT_OPENING_HOURS;
+  }
+
+  const validTypes = ["defined", "always_open", "not_specified"];
+
+  const type = validTypes.includes(openingHours.type)
+    ? openingHours.type
+    : "not_specified";
+
+  if (type === "always_open") {
+    return {
+      type: "always_open",
+      days: [],
+      openTime: null,
+      closeTime: null,
+      label: openingHours.label || "Abierto 24 horas",
+    };
+  }
+
+  if (type === "not_specified") {
+    return {
+      type: "not_specified",
+      days: [],
+      openTime: null,
+      closeTime: null,
+      label: openingHours.label || "Horario no especificado",
+    };
+  }
+
+  return {
+    type: "defined",
+    days: Array.isArray(openingHours.days) ? openingHours.days : [],
+    openTime: openingHours.openTime ?? null,
+    closeTime: openingHours.closeTime ?? null,
+    label: openingHours.label || "Horario definido",
+  };
 }
 
 function getPhotoUrl(photo, preferredSize = "medium") {
@@ -236,6 +284,7 @@ function mapSubmissionDetail(doc) {
   const data = doc.data();
   const photos = getPhotos(data);
   const coordinates = getCoordinates(data);
+  const openingHours = normalizeOpeningHours(data.openingHours);
 
   return {
     id: data.placeSubmissionId || doc.id,
@@ -244,6 +293,11 @@ function mapSubmissionDetail(doc) {
     name: data.name || "Lugar sin nombre",
     description: data.description || "",
     price: data.price || null,
+
+    openingHours,
+
+    // Alias por compatibilidad con pantallas que todavía usen schedule.
+    schedule: openingHours.label,
 
     tagId: data.tagId || null,
     tag: data.tagLabel || "Sin categoría",

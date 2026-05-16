@@ -1,5 +1,13 @@
 import { db, FieldValue } from "../../../config/firebase.js";
 
+const DEFAULT_OPENING_HOURS = {
+  type: "not_specified",
+  days: [],
+  openTime: null,
+  closeTime: null,
+  label: "Horario no especificado",
+};
+
 const RETURN_FIELD_KEYS = [
   "name",
   "description",
@@ -9,7 +17,48 @@ const RETURN_FIELD_KEYS = [
   "subtags",
   "approaches",
   "price",
+  "schedule",
 ];
+
+function normalizeOpeningHours(openingHours) {
+  if (!openingHours || typeof openingHours !== "object") {
+    return DEFAULT_OPENING_HOURS;
+  }
+
+  const validTypes = ["defined", "always_open", "not_specified"];
+
+  const type = validTypes.includes(openingHours.type)
+    ? openingHours.type
+    : "not_specified";
+
+  if (type === "always_open") {
+    return {
+      type: "always_open",
+      days: [],
+      openTime: null,
+      closeTime: null,
+      label: openingHours.label || "Abierto 24 horas",
+    };
+  }
+
+  if (type === "not_specified") {
+    return {
+      type: "not_specified",
+      days: [],
+      openTime: null,
+      closeTime: null,
+      label: openingHours.label || "Horario no especificado",
+    };
+  }
+
+  return {
+    type: "defined",
+    days: Array.isArray(openingHours.days) ? openingHours.days : [],
+    openTime: openingHours.openTime ?? null,
+    closeTime: openingHours.closeTime ?? null,
+    label: openingHours.label || "Horario definido",
+  };
+}
 
 function getPhotoUrl(photo) {
   if (!photo) return "";
@@ -182,6 +231,8 @@ function normalizeSnapshotPhotos(photos = []) {
 }
 
 function buildSnapshotBeforeReturn(submissionData = {}) {
+  const openingHours = normalizeOpeningHours(submissionData.openingHours);
+
   return {
     name: submissionData.name || "",
     description: submissionData.description || "",
@@ -203,6 +254,11 @@ function buildSnapshotBeforeReturn(submissionData = {}) {
           : [],
 
     price: submissionData.price || null,
+
+    openingHours,
+
+    // Alias para comparación vieja en frontend.
+    schedule: openingHours.label,
 
     photos: normalizeSnapshotPhotos(submissionData.photos),
   };
@@ -264,6 +320,11 @@ export default async function returnPlaceSubmissionService({
     currentReturnId: returnId,
     returnedAt: FieldValue.serverTimestamp(),
     returnedBy,
+
+    // Guardamos también estos campos en la submission para fácil lectura.
+    returnFields: normalizedFields,
+    snapshotBeforeReturn,
+    updatedAt: FieldValue.serverTimestamp(),
   });
 
   await batch.commit();

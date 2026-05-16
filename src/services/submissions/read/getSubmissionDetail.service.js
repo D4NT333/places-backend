@@ -1,5 +1,13 @@
 import { db } from "../../../config/firebase.js";
 
+const DEFAULT_OPENING_HOURS = {
+  type: "not_specified",
+  days: [],
+  openTime: null,
+  closeTime: null,
+  label: "Horario no especificado",
+};
+
 function formatTimestamp(timestamp) {
   if (!timestamp?.toDate) {
     return null;
@@ -28,6 +36,46 @@ function mapUserPhotoUrl(user) {
   }
 
   return user.photoURL || user.photoUrl || user.avatarUrl || null;
+}
+
+function normalizeOpeningHours(openingHours) {
+  if (!openingHours || typeof openingHours !== "object") {
+    return DEFAULT_OPENING_HOURS;
+  }
+
+  const validTypes = ["defined", "always_open", "not_specified"];
+
+  const type = validTypes.includes(openingHours.type)
+    ? openingHours.type
+    : "not_specified";
+
+  if (type === "always_open") {
+    return {
+      type: "always_open",
+      days: [],
+      openTime: null,
+      closeTime: null,
+      label: openingHours.label || "Abierto 24 horas",
+    };
+  }
+
+  if (type === "not_specified") {
+    return {
+      type: "not_specified",
+      days: [],
+      openTime: null,
+      closeTime: null,
+      label: openingHours.label || "Horario no especificado",
+    };
+  }
+
+  return {
+    type: "defined",
+    days: Array.isArray(openingHours.days) ? openingHours.days : [],
+    openTime: openingHours.openTime ?? null,
+    closeTime: openingHours.closeTime ?? null,
+    label: openingHours.label || "Horario definido",
+  };
 }
 
 function getPhotoUrl(photo, preferredSize = "medium") {
@@ -113,7 +161,6 @@ function normalizePhoto(photo, index) {
     source: photo.source || "user",
     uploadedAt: photo.uploadedAt || null,
 
-    // Aliases para que el frontend pueda usarlo fácil
     originalUrl,
     mediumUrl,
     thumbnailUrl,
@@ -170,10 +217,12 @@ export default async function getSubmissionDetailService({ submissionId }) {
   }
 
   const photos = normalizePhotos(submission.photos);
+  const openingHours = normalizeOpeningHours(submission.openingHours);
 
   console.log("Submission encontrada:", submission.id);
   console.log("Usuario encontrado:", user?.id || null);
   console.log("Fotos normalizadas:", photos.length);
+  console.log("Horario normalizado:", openingHours);
   console.log("===================================================");
 
   return {
@@ -192,8 +241,16 @@ export default async function getSubmissionDetailService({ submissionId }) {
     userPhotoUrl: mapUserPhotoUrl(user),
 
     photos,
-    coverPhotoUrl: photos[0]?.mediumUrl || photos[0]?.originalUrl || photos[0]?.thumbnailUrl || null,
-    thumbnailPhotoUrl: photos[0]?.thumbnailUrl || photos[0]?.mediumUrl || photos[0]?.originalUrl || null,
+    coverPhotoUrl:
+      photos[0]?.mediumUrl ||
+      photos[0]?.originalUrl ||
+      photos[0]?.thumbnailUrl ||
+      null,
+    thumbnailPhotoUrl:
+      photos[0]?.thumbnailUrl ||
+      photos[0]?.mediumUrl ||
+      photos[0]?.originalUrl ||
+      null,
 
     location: submission.location || null,
 
@@ -201,9 +258,16 @@ export default async function getSubmissionDetailService({ submissionId }) {
     tagLabel: submission.tagLabel || null,
 
     subtags: Array.isArray(submission.subtags) ? submission.subtags : [],
-    approaches: Array.isArray(submission.approaches) ? submission.approaches : [],
+    approaches: Array.isArray(submission.approaches)
+      ? submission.approaches
+      : [],
 
     price: submission.price || null,
+
+    openingHours,
+
+    // Alias temporal para que el frontend viejo siga funcionando.
+    schedule: openingHours.label,
 
     reviewCycle: submission.reviewCycle || 1,
     wasReturnedBefore: Boolean(submission.wasReturnedBefore),

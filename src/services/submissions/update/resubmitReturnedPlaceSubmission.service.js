@@ -37,6 +37,56 @@ function normalizeLocation(value) {
   };
 }
 
+function normalizeOpeningHours(value) {
+  if (!value || typeof value !== "object") {
+    throw createHttpError("Horario inválido.", 400);
+  }
+
+  const validTypes = ["defined", "always_open"];
+
+  if (!validTypes.includes(value.type)) {
+    throw createHttpError("Tipo de horario inválido.", 400);
+  }
+
+  if (value.type === "always_open") {
+    return {
+      type: "always_open",
+      days: [],
+      openTime: null,
+      closeTime: null,
+      label: "Abierto 24 horas",
+    };
+  }
+
+  const days = cleanStringArray(value.days);
+  const openTime = cleanText(value.openTime);
+  const closeTime = cleanText(value.closeTime);
+  const label = cleanText(value.label);
+
+  if (days.length === 0) {
+    throw createHttpError("Debes seleccionar al menos un día.", 400);
+  }
+
+  if (!openTime || !closeTime) {
+    throw createHttpError("Debes seleccionar hora de apertura y cierre.", 400);
+  }
+
+  if (openTime === closeTime) {
+    throw createHttpError(
+      "La hora de apertura y cierre no puede ser igual.",
+      400
+    );
+  }
+
+  return {
+    type: "defined",
+    days,
+    openTime,
+    closeTime,
+    label: label || `${days.join(", ")} · ${openTime} - ${closeTime}`,
+  };
+}
+
 function applyPhotoCorrections(currentPhotos = [], photoCorrections = []) {
   const nextPhotos = Array.isArray(currentPhotos) ? [...currentPhotos] : [];
 
@@ -135,8 +185,43 @@ function buildSubmissionUpdateData({ correctedFields, submissionData }) {
     updateData.price = price;
   }
 
-  if (hasOwn(correctedFields, "schedule")) {
-    updateData.schedule = cleanText(correctedFields.schedule);
+  /**
+   * Modelo nuevo:
+   * correctedFields.openingHours llega como map/object desde el front.
+   */
+  if (hasOwn(correctedFields, "openingHours")) {
+    const openingHours = normalizeOpeningHours(correctedFields.openingHours);
+
+    updateData.openingHours = openingHours;
+
+    // Alias temporal para pantallas viejas que todavía lean submission.schedule.
+    updateData.schedule = openingHours.label;
+  }
+
+  /**
+   * Compatibilidad vieja:
+   * si alguna app todavía manda schedule como string, no truena.
+   * Pero el modelo bueno sigue siendo openingHours.
+   */
+  if (
+    hasOwn(correctedFields, "schedule") &&
+    !hasOwn(correctedFields, "openingHours")
+  ) {
+    const schedule = cleanText(correctedFields.schedule);
+
+    if (!schedule) {
+      throw createHttpError("Horario inválido.", 400);
+    }
+
+    updateData.openingHours = {
+      type: "not_specified",
+      days: [],
+      openTime: null,
+      closeTime: null,
+      label: schedule,
+    };
+
+    updateData.schedule = schedule;
   }
 
   if (hasOwn(correctedFields, "location")) {

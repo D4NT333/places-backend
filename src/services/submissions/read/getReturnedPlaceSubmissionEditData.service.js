@@ -1,5 +1,13 @@
 import { db } from "../../../config/firebase.js";
 
+const DEFAULT_OPENING_HOURS = {
+  type: "not_specified",
+  days: [],
+  openTime: null,
+  closeTime: null,
+  label: "Horario no especificado",
+};
+
 function formatTimestamp(value) {
   if (!value) return null;
 
@@ -23,6 +31,52 @@ function getTimestampMs(value) {
 
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function normalizeOpeningHours(openingHours, fallbackSchedule = "") {
+  if (!openingHours || typeof openingHours !== "object") {
+    return {
+      ...DEFAULT_OPENING_HOURS,
+      label: fallbackSchedule || DEFAULT_OPENING_HOURS.label,
+    };
+  }
+
+  const validTypes = ["defined", "always_open", "not_specified"];
+
+  const type = validTypes.includes(openingHours.type)
+    ? openingHours.type
+    : "not_specified";
+
+  if (type === "always_open") {
+    return {
+      type: "always_open",
+      days: [],
+      openTime: null,
+      closeTime: null,
+      label: openingHours.label || "Abierto 24 horas",
+    };
+  }
+
+  if (type === "defined") {
+    return {
+      type: "defined",
+      days: Array.isArray(openingHours.days) ? openingHours.days : [],
+      openTime: openingHours.openTime || "09:00",
+      closeTime: openingHours.closeTime || "18:00",
+      label: openingHours.label || fallbackSchedule || "Horario definido",
+    };
+  }
+
+  return {
+    type: "not_specified",
+    days: [],
+    openTime: null,
+    closeTime: null,
+    label:
+      openingHours.label ||
+      fallbackSchedule ||
+      "Horario no especificado",
+  };
 }
 
 function getPhotoUrl(photo, preferredSize = "medium") {
@@ -210,6 +264,11 @@ function normalizePhotos(photos = []) {
 }
 
 function normalizeSubmission({ id, data }) {
+  const openingHours = normalizeOpeningHours(
+    data.openingHours,
+    data.schedule
+  );
+
   return {
     id,
 
@@ -232,6 +291,9 @@ function normalizeSubmission({ id, data }) {
           : [],
 
     price: data.price || data.priceLabel || "",
+
+    openingHours,
+    schedule: openingHours.label,
 
     location: data.location || data.coordinates || null,
 
@@ -307,6 +369,11 @@ function normalizeReturnFields(returnData = {}) {
 }
 
 function normalizeSnapshot(snapshot = {}) {
+  const openingHours = normalizeOpeningHours(
+    snapshot.openingHours,
+    snapshot.schedule
+  );
+
   return {
     name: snapshot.name || "",
     description: snapshot.description || "",
@@ -324,6 +391,9 @@ function normalizeSnapshot(snapshot = {}) {
           : [],
 
     price: snapshot.price || snapshot.priceLabel || "",
+
+    openingHours,
+    schedule: openingHours.label,
 
     location: snapshot.location || snapshot.coordinates || null,
 
