@@ -14,32 +14,176 @@ function formatFirestoreDate(value) {
   return value;
 }
 
-function normalizePhoto(photo) {
+function getPhotoUrl(photo, preferredSize = "medium") {
   if (!photo) return null;
 
   if (typeof photo === "string") {
+    return photo;
+  }
+
+  if (preferredSize === "thumbnail") {
+    return (
+      photo.thumbnailUrl ||
+      photo.thumbnail?.url ||
+      photo.displayUrl ||
+      photo.mediumUrl ||
+      photo.medium?.url ||
+      photo.originalUrl ||
+      photo.original?.url ||
+      photo.thumbnailURL ||
+      photo.mediumURL ||
+      photo.downloadURL ||
+      photo.url ||
+      photo.imageUrl ||
+      photo.photoUrl ||
+      photo.uri ||
+      photo.src ||
+      null
+    );
+  }
+
+  if (preferredSize === "original") {
+    return (
+      photo.originalUrl ||
+      photo.original?.url ||
+      photo.downloadURL ||
+      photo.displayUrl ||
+      photo.mediumUrl ||
+      photo.medium?.url ||
+      photo.thumbnailUrl ||
+      photo.thumbnail?.url ||
+      photo.mediumURL ||
+      photo.thumbnailURL ||
+      photo.url ||
+      photo.imageUrl ||
+      photo.photoUrl ||
+      photo.uri ||
+      photo.src ||
+      null
+    );
+  }
+
+  return (
+    photo.displayUrl ||
+    photo.mediumUrl ||
+    photo.medium?.url ||
+    photo.originalUrl ||
+    photo.original?.url ||
+    photo.thumbnailUrl ||
+    photo.thumbnail?.url ||
+    photo.mediumURL ||
+    photo.downloadURL ||
+    photo.thumbnailURL ||
+    photo.url ||
+    photo.imageUrl ||
+    photo.photoUrl ||
+    photo.uri ||
+    photo.src ||
+    null
+  );
+}
+
+function normalizePhoto(photo, index) {
+  if (!photo) return null;
+
+  const originalUrl = getPhotoUrl(photo, "original");
+  const mediumUrl = getPhotoUrl(photo, "medium");
+  const thumbnailUrl = getPhotoUrl(photo, "thumbnail");
+
+  const displayUrl = mediumUrl || originalUrl || thumbnailUrl;
+
+  if (!displayUrl) return null;
+
+  if (typeof photo === "string") {
     return {
-      url: photo,
-      imageUrl: photo,
-      fullUrl: photo,
+      photoId: `photo_${index + 1}`,
+
+      url: displayUrl,
+      imageUrl: displayUrl,
+      fullUrl: displayUrl,
+
+      originalUrl: displayUrl,
+      mediumUrl: displayUrl,
+      thumbnailUrl: displayUrl,
+      displayUrl,
+
+      original: {
+        url: displayUrl,
+        path: null,
+        fileName: null,
+        width: null,
+        height: null,
+        size: null,
+        mimeType: null,
+      },
+
+      medium: {
+        url: displayUrl,
+        path: null,
+        fileName: null,
+        width: null,
+        height: null,
+        mimeType: null,
+      },
+
+      thumbnail: {
+        url: displayUrl,
+        path: null,
+        fileName: null,
+        width: null,
+        height: null,
+        mimeType: null,
+      },
+
+      source: "legacy",
+      uploadedAt: null,
     };
   }
 
-  const url =
-    photo.url ||
-    photo.downloadURL ||
-    photo.imageUrl ||
-    photo.uri ||
-    photo.fullUrl ||
-    null;
-
-  if (!url) return null;
-
   return {
     ...photo,
-    url,
-    imageUrl: url,
-    fullUrl: photo.fullUrl || url,
+
+    photoId: photo.photoId || `photo_${index + 1}`,
+
+    url: displayUrl,
+    imageUrl: displayUrl,
+    fullUrl: originalUrl || displayUrl,
+
+    originalUrl,
+    mediumUrl,
+    thumbnailUrl,
+    displayUrl,
+
+    original: {
+      url: originalUrl,
+      path: photo.original?.path || photo.storagePath || null,
+      fileName: photo.original?.fileName || photo.fileName || null,
+      width: photo.original?.width ?? photo.width ?? null,
+      height: photo.original?.height ?? photo.height ?? null,
+      size: photo.original?.size ?? photo.fileSize ?? null,
+      mimeType: photo.original?.mimeType || photo.mimeType || null,
+    },
+
+    medium: {
+      url: mediumUrl,
+      path: photo.medium?.path || photo.mediumPath || null,
+      fileName: photo.medium?.fileName || photo.mediumFileName || null,
+      width: photo.medium?.width ?? photo.mediumWidth ?? null,
+      height: photo.medium?.height ?? photo.mediumHeight ?? null,
+      mimeType: photo.medium?.mimeType || "image/jpeg",
+    },
+
+    thumbnail: {
+      url: thumbnailUrl,
+      path: photo.thumbnail?.path || photo.thumbnailPath || null,
+      fileName: photo.thumbnail?.fileName || photo.thumbnailFileName || null,
+      width: photo.thumbnail?.width ?? photo.thumbnailWidth ?? null,
+      height: photo.thumbnail?.height ?? photo.thumbnailHeight ?? null,
+      mimeType: photo.thumbnail?.mimeType || "image/jpeg",
+    },
+
+    source: photo.source || "user",
+    uploadedAt: photo.uploadedAt || null,
   };
 }
 
@@ -50,7 +194,9 @@ function getPhotos(data) {
     return [];
   }
 
-  return rawPhotos.map(normalizePhoto).filter(Boolean);
+  return rawPhotos
+    .map((photo, index) => normalizePhoto(photo, index))
+    .filter(Boolean);
 }
 
 function getCoordinates(data) {
@@ -109,10 +255,23 @@ function mapSubmissionDetail(doc) {
     status: data.status || "in_review",
     source: data.source || null,
 
-    imageUrl: photos[0]?.imageUrl || null,
+    imageUrl:
+      photos[0]?.mediumUrl ||
+      photos[0]?.displayUrl ||
+      photos[0]?.imageUrl ||
+      photos[0]?.thumbnailUrl ||
+      null,
+
+    thumbnailUrl:
+      photos[0]?.thumbnailUrl ||
+      photos[0]?.mediumUrl ||
+      photos[0]?.displayUrl ||
+      null,
+
     photos,
 
     coordinates,
+    location: coordinates,
 
     createdAt: formatFirestoreDate(data.createdAt),
     returnedAt: formatFirestoreDate(data.returnedAt),

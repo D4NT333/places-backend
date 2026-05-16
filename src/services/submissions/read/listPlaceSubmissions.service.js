@@ -28,12 +28,50 @@ function formatTimestamp(timestamp) {
   return timestamp.toDate().toISOString();
 }
 
-function getFirstPhotoUrl(photos = []) {
+function getPhotoUrl(photo, preferredSize = "thumbnail") {
+  if (!photo) return null;
+
+  if (preferredSize === "thumbnail") {
+    return (
+      photo.thumbnail?.url ||
+      photo.thumbnailURL ||
+      photo.medium?.url ||
+      photo.mediumURL ||
+      photo.original?.url ||
+      photo.downloadURL ||
+      null
+    );
+  }
+
+  if (preferredSize === "medium") {
+    return (
+      photo.medium?.url ||
+      photo.mediumURL ||
+      photo.original?.url ||
+      photo.downloadURL ||
+      photo.thumbnail?.url ||
+      photo.thumbnailURL ||
+      null
+    );
+  }
+
+  return (
+    photo.original?.url ||
+    photo.downloadURL ||
+    photo.medium?.url ||
+    photo.mediumURL ||
+    photo.thumbnail?.url ||
+    photo.thumbnailURL ||
+    null
+  );
+}
+
+function getFirstPhotoUrl(photos = [], preferredSize = "thumbnail") {
   if (!Array.isArray(photos) || photos.length === 0) {
     return null;
   }
 
-  return photos[0]?.downloadURL || null;
+  return getPhotoUrl(photos[0], preferredSize);
 }
 
 function mapUserDisplayName(user) {
@@ -56,6 +94,16 @@ function mapUserPhotoUrl(user) {
   }
 
   return user.photoURL || user.photoUrl || user.avatarUrl || null;
+}
+
+function getUniqueUserIds(submissions = []) {
+  return [
+    ...new Set(
+      submissions
+        .map((submission) => submission.createdBy)
+        .filter(Boolean)
+    ),
+  ];
 }
 
 export default async function listPlaceSubmissionsService({
@@ -108,7 +156,7 @@ export default async function listPlaceSubmissionsService({
 
   console.log("Submissions encontradas:", submissions.length);
 
-  const userIds = submissions.map((submission) => submission.createdBy);
+  const userIds = getUniqueUserIds(submissions);
 
   console.log("User IDs encontrados:", userIds);
 
@@ -118,6 +166,7 @@ export default async function listPlaceSubmissionsService({
 
   const items = submissions.map((submission) => {
     const user = usersMap[submission.createdBy];
+
     return {
       id: submission.id,
       placeSubmissionId: submission.placeSubmissionId || submission.id,
@@ -130,7 +179,7 @@ export default async function listPlaceSubmissionsService({
       userName: mapUserDisplayName(user),
       userPhotoUrl: mapUserPhotoUrl(user),
 
-      placePhotoUrl: getFirstPhotoUrl(submission.photos),
+      placePhotoUrl: getFirstPhotoUrl(submission.photos, "thumbnail"),
 
       reviewCycle: submission.reviewCycle || 1,
       wasReturnedBefore: Boolean(submission.wasReturnedBefore),

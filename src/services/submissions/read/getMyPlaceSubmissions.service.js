@@ -14,28 +14,95 @@ function formatFirestoreDate(value) {
   return value;
 }
 
+function getPhotoUrl(photo, preferredSize = "thumbnail") {
+  if (!photo) return null;
+
+  if (typeof photo === "string") {
+    return photo;
+  }
+
+  if (preferredSize === "thumbnail") {
+    return (
+      photo.thumbnailUrl ||
+      photo.thumbnail?.url ||
+      photo.displayUrl ||
+      photo.mediumUrl ||
+      photo.medium?.url ||
+      photo.originalUrl ||
+      photo.original?.url ||
+      photo.thumbnailURL ||
+      photo.mediumURL ||
+      photo.downloadURL ||
+      photo.url ||
+      photo.imageUrl ||
+      photo.photoUrl ||
+      photo.uri ||
+      photo.src ||
+      null
+    );
+  }
+
+  if (preferredSize === "medium") {
+    return (
+      photo.displayUrl ||
+      photo.mediumUrl ||
+      photo.medium?.url ||
+      photo.originalUrl ||
+      photo.original?.url ||
+      photo.thumbnailUrl ||
+      photo.thumbnail?.url ||
+      photo.mediumURL ||
+      photo.downloadURL ||
+      photo.thumbnailURL ||
+      photo.url ||
+      photo.imageUrl ||
+      photo.photoUrl ||
+      photo.uri ||
+      photo.src ||
+      null
+    );
+  }
+
+  return (
+    photo.originalUrl ||
+    photo.original?.url ||
+    photo.downloadURL ||
+    photo.displayUrl ||
+    photo.mediumUrl ||
+    photo.medium?.url ||
+    photo.thumbnailUrl ||
+    photo.thumbnail?.url ||
+    photo.mediumURL ||
+    photo.thumbnailURL ||
+    photo.url ||
+    photo.imageUrl ||
+    photo.photoUrl ||
+    photo.uri ||
+    photo.src ||
+    null
+  );
+}
+
 function getThumbnailUrl(data) {
-  if (data.thumbnailUrl) return data.thumbnailUrl;
+  if (!data) return null;
 
-  const photos = data.photos || data.images || data.photoUrls || [];
+  return (
+    data.thumbnailUrl ||
+    data.thumbnailPhotoUrl ||
+    data.coverPhotoUrl ||
+    getFirstPhotoUrl(data.photos, "thumbnail") ||
+    getFirstPhotoUrl(data.images, "thumbnail") ||
+    getFirstPhotoUrl(data.photoUrls, "thumbnail") ||
+    null
+  );
+}
 
+function getFirstPhotoUrl(photos = [], preferredSize = "thumbnail") {
   if (!Array.isArray(photos) || photos.length === 0) {
     return null;
   }
 
-  const firstPhoto = photos[0];
-
-  if (typeof firstPhoto === "string") {
-    return firstPhoto;
-  }
-
-  return (
-    firstPhoto.url ||
-    firstPhoto.downloadURL ||
-    firstPhoto.imageUrl ||
-    firstPhoto.uri ||
-    null
-  );
+  return getPhotoUrl(photos[0], preferredSize);
 }
 
 function mapSubmissionDoc(doc) {

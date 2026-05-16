@@ -11,13 +11,36 @@ const RETURN_FIELD_KEYS = [
   "price",
 ];
 
+function getPhotoUrl(photo) {
+  if (!photo) return "";
+
+  if (typeof photo === "string") return photo;
+
+  return (
+    photo.url ||
+    photo.displayUrl ||
+    photo.thumbnailUrl ||
+    photo.thumbnail?.url ||
+    photo.mediumUrl ||
+    photo.medium?.url ||
+    photo.originalUrl ||
+    photo.original?.url ||
+    photo.thumbnailURL ||
+    photo.mediumURL ||
+    photo.downloadURL ||
+    photo.uri ||
+    photo.src ||
+    ""
+  );
+}
+
 function normalizePhotoItems(photoItems = []) {
   if (!Array.isArray(photoItems)) return [];
 
   return photoItems.map((photo, index) => ({
     index: typeof photo.index === "number" ? photo.index : index,
 
-    url: typeof photo.url === "string" ? photo.url : "",
+    url: getPhotoUrl(photo),
 
     selected: Boolean(photo.selected),
 
@@ -53,6 +76,111 @@ function normalizeReturnFields(fields = {}) {
   return normalized;
 }
 
+function normalizeSnapshotPhotos(photos = []) {
+  if (!Array.isArray(photos)) return [];
+
+  return photos.map((photo, index) => {
+    if (typeof photo === "string") {
+      return {
+        photoId: `photo_${index + 1}`,
+        original: {
+          url: photo,
+          path: null,
+          fileName: null,
+          width: null,
+          height: null,
+          size: null,
+          mimeType: null,
+        },
+        medium: {
+          url: photo,
+          path: null,
+          fileName: null,
+          width: null,
+          height: null,
+          mimeType: null,
+        },
+        thumbnail: {
+          url: photo,
+          path: null,
+          fileName: null,
+          width: null,
+          height: null,
+          mimeType: null,
+        },
+        source: "legacy",
+        uploadedAt: null,
+        displayUrl: photo,
+        mediumUrl: photo,
+        thumbnailUrl: photo,
+        originalUrl: photo,
+      };
+    }
+
+    const originalUrl =
+      photo.original?.url ||
+      photo.originalUrl ||
+      photo.downloadURL ||
+      photo.url ||
+      null;
+
+    const mediumUrl =
+      photo.medium?.url ||
+      photo.mediumUrl ||
+      photo.mediumURL ||
+      originalUrl ||
+      null;
+
+    const thumbnailUrl =
+      photo.thumbnail?.url ||
+      photo.thumbnailUrl ||
+      photo.thumbnailURL ||
+      mediumUrl ||
+      originalUrl ||
+      null;
+
+    return {
+      photoId: photo.photoId || `photo_${index + 1}`,
+
+      original: {
+        url: originalUrl,
+        path: photo.original?.path || photo.storagePath || null,
+        fileName: photo.original?.fileName || photo.fileName || null,
+        width: photo.original?.width ?? photo.width ?? null,
+        height: photo.original?.height ?? photo.height ?? null,
+        size: photo.original?.size ?? photo.fileSize ?? null,
+        mimeType: photo.original?.mimeType || photo.mimeType || null,
+      },
+
+      medium: {
+        url: mediumUrl,
+        path: photo.medium?.path || photo.mediumPath || null,
+        fileName: photo.medium?.fileName || photo.mediumFileName || null,
+        width: photo.medium?.width ?? photo.mediumWidth ?? null,
+        height: photo.medium?.height ?? photo.mediumHeight ?? null,
+        mimeType: photo.medium?.mimeType || "image/jpeg",
+      },
+
+      thumbnail: {
+        url: thumbnailUrl,
+        path: photo.thumbnail?.path || photo.thumbnailPath || null,
+        fileName: photo.thumbnail?.fileName || photo.thumbnailFileName || null,
+        width: photo.thumbnail?.width ?? photo.thumbnailWidth ?? null,
+        height: photo.thumbnail?.height ?? photo.thumbnailHeight ?? null,
+        mimeType: photo.thumbnail?.mimeType || "image/jpeg",
+      },
+
+      source: photo.source || "user",
+      uploadedAt: photo.uploadedAt || null,
+
+      displayUrl: mediumUrl || originalUrl || thumbnailUrl,
+      mediumUrl,
+      thumbnailUrl,
+      originalUrl,
+    };
+  });
+}
+
 function buildSnapshotBeforeReturn(submissionData = {}) {
   return {
     name: submissionData.name || "",
@@ -76,9 +204,7 @@ function buildSnapshotBeforeReturn(submissionData = {}) {
 
     price: submissionData.price || null,
 
-    photos: Array.isArray(submissionData.photos)
-      ? submissionData.photos
-      : [],
+    photos: normalizeSnapshotPhotos(submissionData.photos),
   };
 }
 
@@ -125,11 +251,8 @@ export default async function returnPlaceSubmissionService({
 
     snapshotBeforeReturn,
 
-    statusBeforeReturn: submissionData.status || null,
-
     resolved: false,
     resolvedAt: null,
-    changedFields: [],
   };
 
   const batch = db.batch();

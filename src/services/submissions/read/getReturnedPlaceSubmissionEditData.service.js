@@ -25,39 +25,188 @@ function getTimestampMs(value) {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
-function normalizePhoto(photo = {}) {
+function getPhotoUrl(photo, preferredSize = "medium") {
+  if (!photo) return null;
+
+  if (typeof photo === "string") return photo;
+
+  if (preferredSize === "thumbnail") {
+    return (
+      photo.thumbnailUrl ||
+      photo.thumbnail?.url ||
+      photo.previewURL ||
+      photo.displayUrl ||
+      photo.mediumUrl ||
+      photo.medium?.url ||
+      photo.originalUrl ||
+      photo.original?.url ||
+      photo.thumbnailURL ||
+      photo.mediumURL ||
+      photo.downloadURL ||
+      photo.url ||
+      photo.imageUrl ||
+      photo.photoUrl ||
+      photo.uri ||
+      photo.src ||
+      null
+    );
+  }
+
+  if (preferredSize === "original") {
+    return (
+      photo.originalUrl ||
+      photo.original?.url ||
+      photo.fullUrl ||
+      photo.downloadURL ||
+      photo.displayUrl ||
+      photo.mediumUrl ||
+      photo.medium?.url ||
+      photo.thumbnailUrl ||
+      photo.thumbnail?.url ||
+      photo.mediumURL ||
+      photo.thumbnailURL ||
+      photo.url ||
+      photo.imageUrl ||
+      photo.photoUrl ||
+      photo.uri ||
+      photo.src ||
+      null
+    );
+  }
+
+  return (
+    photo.displayUrl ||
+    photo.mediumUrl ||
+    photo.medium?.url ||
+    photo.originalUrl ||
+    photo.original?.url ||
+    photo.thumbnailUrl ||
+    photo.thumbnail?.url ||
+    photo.mediumURL ||
+    photo.downloadURL ||
+    photo.thumbnailURL ||
+    photo.url ||
+    photo.imageUrl ||
+    photo.photoUrl ||
+    photo.uri ||
+    photo.src ||
+    null
+  );
+}
+
+function normalizePhoto(photo = {}, index = 0) {
+  if (!photo) return null;
+
+  const originalUrl = getPhotoUrl(photo, "original");
+  const mediumUrl = getPhotoUrl(photo, "medium");
+  const thumbnailUrl = getPhotoUrl(photo, "thumbnail");
+
+  const displayUrl = mediumUrl || originalUrl || thumbnailUrl;
+  const previewURL = thumbnailUrl || mediumUrl || originalUrl;
+
+  if (!displayUrl && !previewURL) return null;
+
   if (typeof photo === "string") {
     return {
-      url: photo,
-      downloadURL: photo,
-      mediumURL: photo,
-      thumbnailURL: photo,
+      photoId: `photo_${index + 1}`,
+
+      url: displayUrl,
+      imageUrl: displayUrl,
+      fullUrl: originalUrl || displayUrl,
+      previewURL,
+
+      originalUrl: originalUrl || displayUrl,
+      mediumUrl: mediumUrl || displayUrl,
+      thumbnailUrl: thumbnailUrl || displayUrl,
+      displayUrl,
+
+      original: {
+        url: originalUrl || displayUrl,
+        path: null,
+        fileName: null,
+        width: null,
+        height: null,
+        size: null,
+        mimeType: null,
+      },
+
+      medium: {
+        url: mediumUrl || displayUrl,
+        path: null,
+        fileName: null,
+        width: null,
+        height: null,
+        mimeType: null,
+      },
+
+      thumbnail: {
+        url: thumbnailUrl || displayUrl,
+        path: null,
+        fileName: null,
+        width: null,
+        height: null,
+        mimeType: null,
+      },
+
+      source: "legacy",
+      uploadedAt: null,
     };
   }
 
   return {
     ...photo,
 
-    // URL preferida para vistas pesadas.
-    url:
-      photo.mediumURL ||
-      photo.downloadURL ||
-      photo.url ||
-      photo.imageUrl ||
-      photo.uri ||
-      photo.thumbnailURL ||
-      null,
+    photoId: photo.photoId || photo.id || `photo_${index + 1}`,
 
-    // URL preferida para previews.
-    previewURL:
-      photo.thumbnailURL ||
-      photo.mediumURL ||
-      photo.downloadURL ||
-      photo.url ||
-      photo.imageUrl ||
-      photo.uri ||
-      null,
+    url: displayUrl,
+    imageUrl: displayUrl,
+    fullUrl: originalUrl || displayUrl,
+    previewURL,
+
+    originalUrl,
+    mediumUrl,
+    thumbnailUrl,
+    displayUrl,
+
+    original: {
+      url: originalUrl,
+      path: photo.original?.path || photo.storagePath || photo.path || null,
+      fileName: photo.original?.fileName || photo.fileName || null,
+      width: photo.original?.width ?? photo.width ?? null,
+      height: photo.original?.height ?? photo.height ?? null,
+      size: photo.original?.size ?? photo.fileSize ?? photo.size ?? null,
+      mimeType: photo.original?.mimeType || photo.mimeType || null,
+    },
+
+    medium: {
+      url: mediumUrl,
+      path: photo.medium?.path || photo.mediumPath || null,
+      fileName: photo.medium?.fileName || photo.mediumFileName || null,
+      width: photo.medium?.width ?? photo.mediumWidth ?? null,
+      height: photo.medium?.height ?? photo.mediumHeight ?? null,
+      mimeType: photo.medium?.mimeType || "image/jpeg",
+    },
+
+    thumbnail: {
+      url: thumbnailUrl,
+      path: photo.thumbnail?.path || photo.thumbnailPath || null,
+      fileName: photo.thumbnail?.fileName || photo.thumbnailFileName || null,
+      width: photo.thumbnail?.width ?? photo.thumbnailWidth ?? null,
+      height: photo.thumbnail?.height ?? photo.thumbnailHeight ?? null,
+      mimeType: photo.thumbnail?.mimeType || "image/jpeg",
+    },
+
+    source: photo.source || "user",
+    uploadedAt: photo.uploadedAt || null,
   };
+}
+
+function normalizePhotos(photos = []) {
+  if (!Array.isArray(photos)) return [];
+
+  return photos
+    .map((photo, index) => normalizePhoto(photo, index))
+    .filter(Boolean);
 }
 
 function normalizeSubmission({ id, data }) {
@@ -74,15 +223,19 @@ function normalizeSubmission({ id, data }) {
     tagLabel: data.tagLabel || data.tag || null,
 
     subtags: Array.isArray(data.subtags) ? data.subtags : [],
-    approaches: Array.isArray(data.approaches) ? data.approaches : [],
+    approaches: Array.isArray(data.approaches)
+      ? data.approaches
+      : Array.isArray(data.approach)
+        ? data.approach
+        : Array.isArray(data.focuses)
+          ? data.focuses
+          : [],
 
     price: data.price || data.priceLabel || "",
 
     location: data.location || data.coordinates || null,
 
-    photos: Array.isArray(data.photos)
-      ? data.photos.map(normalizePhoto)
-      : [],
+    photos: normalizePhotos(data.photos),
 
     reviewCycle: data.reviewCycle || 0,
     wasReturnedBefore: Boolean(data.wasReturnedBefore),
@@ -92,6 +245,17 @@ function normalizeSubmission({ id, data }) {
     returnedAt: formatTimestamp(data.returnedAt),
     resubmittedAt: formatTimestamp(data.resubmittedAt),
   };
+}
+
+function normalizePhotoReturnItems(items = []) {
+  if (!Array.isArray(items)) return [];
+
+  return items.map((item, index) => ({
+    index: typeof item.index === "number" ? item.index : index,
+    url: getPhotoUrl(item, "thumbnail") || item.url || "",
+    selected: Boolean(item.selected),
+    message: item.message || "",
+  }));
 }
 
 function normalizeReturnFields(returnData = {}) {
@@ -133,6 +297,7 @@ function normalizeReturnFields(returnData = {}) {
     photos: {
       selected: Boolean(fields.photos?.selected),
       message: fields.photos?.message || "",
+      items: normalizePhotoReturnItems(fields.photos?.items),
     },
     location: {
       selected: Boolean(fields.location?.selected),
@@ -150,15 +315,19 @@ function normalizeSnapshot(snapshot = {}) {
     tagLabel: snapshot.tagLabel || snapshot.tag || null,
 
     subtags: Array.isArray(snapshot.subtags) ? snapshot.subtags : [],
-    approaches: Array.isArray(snapshot.approaches) ? snapshot.approaches : [],
+    approaches: Array.isArray(snapshot.approaches)
+      ? snapshot.approaches
+      : Array.isArray(snapshot.approach)
+        ? snapshot.approach
+        : Array.isArray(snapshot.focuses)
+          ? snapshot.focuses
+          : [],
 
     price: snapshot.price || snapshot.priceLabel || "",
 
     location: snapshot.location || snapshot.coordinates || null,
 
-    photos: Array.isArray(snapshot.photos)
-      ? snapshot.photos.map(normalizePhoto)
-      : [],
+    photos: normalizePhotos(snapshot.photos),
   };
 }
 
@@ -178,9 +347,9 @@ function normalizeReturn({ id, data }) {
     resolvedAt: formatTimestamp(data.resolvedAt),
     returnedAt: formatTimestamp(data.returnedAt),
 
-    statusBeforeReturn: data.statusBeforeReturn || null,
-
     fields: normalizeReturnFields(data),
+    returnFields: normalizeReturnFields(data),
+
     snapshotBeforeReturn,
   };
 }
@@ -259,10 +428,8 @@ export default async function getReturnedPlaceSubmissionEditDataService({
 
     returnData: activeReturn,
 
-    snapshotBeforeReturn:
-      activeReturn?.snapshotBeforeReturn || null,
+    snapshotBeforeReturn: activeReturn?.snapshotBeforeReturn || null,
 
-    returnFields:
-      activeReturn?.fields || null,
+    returnFields: activeReturn?.fields || null,
   };
 }
