@@ -68,7 +68,6 @@ export async function registerEmailUserController(req, res) {
 
     const userPayload = {
       uid,
-      email,
       name: cleanName,
       birthDate,
       photoURL: null,

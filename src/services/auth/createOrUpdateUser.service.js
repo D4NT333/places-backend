@@ -36,7 +36,6 @@ export default async function createOrUpdateUserService({ decodedToken }) {
 
   const userData = {
     uid,
-    email,
     name,
     photoURL,
     provider,
