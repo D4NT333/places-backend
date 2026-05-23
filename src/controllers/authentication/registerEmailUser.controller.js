@@ -61,6 +61,15 @@ export async function registerEmailUserController(req, res) {
       });
     }
 
+    /**
+     * Esto NO guarda nada en Firestore.
+     * Esto actualiza Firebase Auth para que el correo de verificación
+     * pueda usar el nombre del usuario.
+     */
+    await auth.updateUser(uid, {
+      displayName: cleanName,
+    });
+
     const userRef = db.collection("user").doc(uid);
     const userSnap = await userRef.get();
 
@@ -88,7 +97,6 @@ export async function registerEmailUserController(req, res) {
       message: "Usuario registrado correctamente.",
       user: {
         uid,
-        email,
         name: cleanName,
         birthDate,
         photoURL: null,
