@@ -124,7 +124,9 @@ function mapSubmissionDoc(doc) {
     status: data.status || "in_review",
 
     createdAt: formatFirestoreDate(data.createdAt),
+    updatedAt: formatFirestoreDate(data.updatedAt),
     returnedAt: formatFirestoreDate(data.returnedAt),
+    resubmittedAt: formatFirestoreDate(data.resubmittedAt),
   };
 }
 
