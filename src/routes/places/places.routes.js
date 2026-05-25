@@ -4,6 +4,7 @@ import getCreateCatalogController from "../../controllers/places/getCreateCatalo
 import listGooglePlaceCandidatesController from "../../controllers/places/listGooglePlaceCandidates.controller.js";
 import getGoogleCandidatesSummaryController from "../../controllers/places/getGoogleCandidatesSummary.controller.js";
 import getGooglePlaceCandidateDetailsController from "../../controllers/places/getGooglePlaceCandidateDetails.controller.js";
+import registerPlaceFromCandidateController from "../../controllers/places/registerPlaceFromCandidate.controller.js";
 
 const router = Router();
 
@@ -20,5 +21,7 @@ router.get("/admin/google-places/candidates",listGooglePlaceCandidatesController
 router.get("/admin/google-places/candidates-summary",getGoogleCandidatesSummaryController);
 
 router.get("/admin/google-places/candidates/:googlePlaceId/details",getGooglePlaceCandidateDetailsController);
+
+router.post("/admin/google-places/register-from-candidate",registerPlaceFromCandidateController);
 
 export default router;  
