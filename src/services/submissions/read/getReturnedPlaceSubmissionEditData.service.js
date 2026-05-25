@@ -320,6 +320,27 @@ function normalizePhotoReturnItems(items = []) {
   }));
 }
 
+function normalizeSubtagReturnItems(items = []) {
+  if (!Array.isArray(items)) return [];
+
+  return items.map((item, index) => ({
+    index: typeof item.index === "number" ? item.index : index,
+
+    label:
+      typeof item.label === "string"
+        ? item.label
+        : typeof item.name === "string"
+          ? item.name
+          : typeof item.value === "string"
+            ? item.value
+            : "",
+
+    selected: Boolean(item.selected),
+
+    message: typeof item.message === "string" ? item.message : "",
+  }));
+}
+
 function normalizeReturnFields(returnData = {}) {
   const fields =
     returnData.fields ||
@@ -341,9 +362,10 @@ function normalizeReturnFields(returnData = {}) {
       message: fields.tag?.message || "",
     },
     subtags: {
-      selected: Boolean(fields.subtags?.selected),
-      message: fields.subtags?.message || "",
-    },
+  selected: Boolean(fields.subtags?.selected),
+  message: fields.subtags?.message || "",
+  items: normalizeSubtagReturnItems(fields.subtags?.items),
+},
     approaches: {
       selected: Boolean(fields.approaches?.selected),
       message: fields.approaches?.message || "",

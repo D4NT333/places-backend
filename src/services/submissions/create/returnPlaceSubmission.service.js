@@ -98,6 +98,28 @@ function normalizePhotoItems(photoItems = []) {
   }));
 }
 
+function normalizeSubtagItems(subtagItems = []) {
+  if (!Array.isArray(subtagItems)) return [];
+
+  return subtagItems.map((subtag, index) => ({
+    index: typeof subtag.index === "number" ? subtag.index : index,
+
+    label:
+      typeof subtag.label === "string"
+        ? subtag.label.trim()
+        : typeof subtag.name === "string"
+          ? subtag.name.trim()
+          : typeof subtag.value === "string"
+            ? subtag.value.trim()
+            : "",
+
+    selected: Boolean(subtag.selected),
+
+    message:
+      typeof subtag.message === "string" ? subtag.message.trim() : "",
+  }));
+}
+
 function normalizeReturnFields(fields = {}) {
   const normalized = {};
 
@@ -109,6 +131,18 @@ function normalizeReturnFields(fields = {}) {
 
       normalized.photos = {
         selected: items.some((photo) => photo.selected),
+        message: typeof field.message === "string" ? field.message.trim() : "",
+        items,
+      };
+
+      return;
+    }
+
+    if (fieldKey === "subtags") {
+      const items = normalizeSubtagItems(field.items);
+
+      normalized.subtags = {
+        selected: items.some((subtag) => subtag.selected),
         message: typeof field.message === "string" ? field.message.trim() : "",
         items,
       };
