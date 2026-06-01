@@ -88,30 +88,61 @@ function normalizeOpeningHours(value) {
 }
 
 function applyPhotoCorrections(currentPhotos = [], photoCorrections = []) {
-  const nextPhotos = Array.isArray(currentPhotos) ? [...currentPhotos] : [];
+  const basePhotos = Array.isArray(currentPhotos) ? [...currentPhotos] : [];
 
-  if (!Array.isArray(photoCorrections)) {
-    return nextPhotos;
+  if (!Array.isArray(photoCorrections) || photoCorrections.length === 0) {
+    return basePhotos;
   }
 
+  const deletedIndexes = new Set();
+  const replacedPhotosByIndex = new Map();
+
   photoCorrections.forEach((correction) => {
+    const type = correction?.type;
     const photoIndex = Number(correction?.photoIndex);
-    const nextPhoto = correction?.photo;
 
     if (!Number.isInteger(photoIndex) || photoIndex < 0) {
       return;
     }
 
-    if (!nextPhoto || typeof nextPhoto !== "object") {
+    if (photoIndex >= basePhotos.length) {
       return;
     }
 
-    nextPhotos[photoIndex] = {
-      ...nextPhoto,
-      replacedPhotoIndex: photoIndex,
-      replacedOldPhotoId: correction.oldPhotoId || null,
-    };
+    if (type === "delete") {
+      deletedIndexes.add(photoIndex);
+      replacedPhotosByIndex.delete(photoIndex);
+      return;
+    }
+
+    if (type === "replace") {
+      const nextPhoto = correction?.photo;
+
+      if (!nextPhoto || typeof nextPhoto !== "object") {
+        return;
+      }
+
+      replacedPhotosByIndex.set(photoIndex, {
+        ...nextPhoto,
+        replacedPhotoIndex: photoIndex,
+        replacedOldPhotoId: correction.oldPhotoId || null,
+      });
+    }
   });
+
+  const nextPhotos = basePhotos
+    .map((photo, index) => {
+      if (deletedIndexes.has(index)) {
+        return null;
+      }
+
+      if (replacedPhotosByIndex.has(index)) {
+        return replacedPhotosByIndex.get(index);
+      }
+
+      return photo;
+    })
+    .filter(Boolean);
 
   return nextPhotos;
 }
