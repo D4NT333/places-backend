@@ -30,13 +30,32 @@ export default async function getAdminMeController(req, res) {
       });
     }
 
+    const authEmail = String(authUser.email || "").toLowerCase().trim();
+    const adminEmail = String(adminData.email || "").toLowerCase().trim();
+
+    if (!authEmail || !adminEmail || authEmail !== adminEmail) {
+      return res.status(403).json({
+        ok: false,
+        message: "La cuenta autenticada no coincide con el administrador registrado.",
+      });
+    }
+
+    const role = adminData.role || "admin";
+
+    if (!["admin", "super_admin"].includes(role)) {
+      return res.status(403).json({
+        ok: false,
+        message: "Tu rol no tiene acceso al panel administrativo.",
+      });
+    }
+
     return res.status(200).json({
       ok: true,
       admin: {
         uid: authUser.uid,
-        email: adminData.email || authUser.email,
+        email: adminEmail,
         displayName: adminData.displayName || authUser.name || "",
-        role: adminData.role || "admin",
+        role,
         isActive: adminData.isActive,
         permissions: adminData.permissions || {},
         photoURL: authUser.picture || null,
