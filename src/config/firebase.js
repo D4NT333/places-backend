@@ -47,4 +47,6 @@ export const firebaseAdmin = admin;
 export const db = admin.firestore();
 export const auth = admin.auth();
 export const FieldValue = admin.firestore.FieldValue;
-export const bucket = admin.storage().bucket();
+export const bucket = FIREBASE_STORAGE_BUCKET
+  ? admin.storage().bucket()
+  : null;
