@@ -8,36 +8,65 @@ function createHttpError(message, statusCode = 400) {
   return error;
 }
 
-function normalizePrice(price) {
-  if (!price) {
-    return {
-      id: null,
-      label: "",
-      level: null,
-    };
-  }
+function normalizePriceRangeId(price) {
+  if (!price) return null;
 
-  if (typeof price === "object") {
+  if (typeof price === "string") {
     return price;
   }
 
-  return {
-    id: price,
-    label: String(price),
-    level: null,
-  };
+  if (typeof price === "object") {
+    return price.id || price.priceRangeId || null;
+  }
+
+  return String(price);
 }
 
-function normalizeSchedule(schedule) {
-  if (!schedule) return null;
+function normalizeOpeningHours(openingHours) {
+  if (!openingHours) {
+    return {
+      type: "not_specified",
+      label: "Horario no especificado",
+      days: [],
+      openTime: null,
+      closeTime: null,
+      isOpenNow: false,
+      lastScheduleCheckAt: null,
+    };
+  }
 
-  if (typeof schedule === "object") {
-    return schedule;
+  if (typeof openingHours === "string") {
+    return {
+      type: "defined",
+      label: openingHours,
+      days: [],
+      openTime: null,
+      closeTime: null,
+      isOpenNow: false,
+      lastScheduleCheckAt: null,
+    };
+  }
+
+  if (typeof openingHours === "object") {
+    return {
+      type: openingHours.type || "defined",
+      label: openingHours.label || "",
+      days: Array.isArray(openingHours.days) ? openingHours.days : [],
+      openTime: openingHours.openTime || null,
+      closeTime: openingHours.closeTime || null,
+      isOpenNow: Boolean(openingHours.isOpenNow),
+      lastScheduleCheckAt: openingHours.lastScheduleCheckAt || null,
+    };
   }
 
   return {
-    id: schedule,
-    label: String(schedule),
+    type: "not_specified",
+    label: "Horario no especificado",
+    days: [],
+    openTime: null,
+    closeTime: null,
+    isOpenNow: false,
+    lastScheduleCheckAt: null,
   };
 }
 
@@ -70,15 +99,13 @@ function normalizeGooglePhotoReferences(photos = []) {
   if (!Array.isArray(photos)) return [];
 
   return photos
-    .filter((photo) => photo?.name || photo?.photoReference)
+    .filter((photo) => photo?.name || photo?.photoReference || photo?.reference)
     .map((photo, index) => ({
       source: "google",
-      photoReference: photo.name || photo.photoReference,
-      widthPx: photo.widthPx || null,
-      heightPx: photo.heightPx || null,
-      authorAttributions: photo.authorAttributions || [],
+      reference: photo.name || photo.photoReference || photo.reference,
+      widthPx: photo.widthPx ?? null,
+      heightPx: photo.heightPx ?? null,
       order: index,
-      status: "active",
     }));
 }
 
@@ -89,12 +116,8 @@ function getMainPhoto(photos = []) {
 
   return {
     source: firstPhoto.source || "google",
-    photoReference: firstPhoto.photoReference || null,
-    widthPx: firstPhoto.widthPx || null,
-    heightPx: firstPhoto.heightPx || null,
-    authorAttributions: firstPhoto.authorAttributions || [],
+    reference: firstPhoto.reference || null,
     order: firstPhoto.order ?? 0,
-    status: firstPhoto.status || "active",
   };
 }
 
@@ -135,7 +158,6 @@ export default async function registerPlaceFromCandidateService({
     candidateId,
     googlePlaceId,
 
-    source = "google",
     status = "published",
 
     name,
@@ -149,9 +171,12 @@ export default async function registerPlaceFromCandidateService({
     tagLabel = "",
     subtags = [],
     approaches = [],
+
     price,
+    priceRangeId,
 
     schedule,
+    openingHours,
 
     googleData = {},
     photos = [],
@@ -185,13 +210,13 @@ export default async function registerPlaceFromCandidateService({
     throw createHttpError("Selecciona al menos un enfoque.", 400);
   }
 
-const normalizedLocation = normalizeLocation(location);
+  const normalizedLocation = normalizeLocation(location);
 
-if (!normalizedLocation) {
-  throw createHttpError("La ubicación del lugar es obligatoria.", 400);
-}
+  if (!normalizedLocation) {
+    throw createHttpError("La ubicación del lugar es obligatoria.", 400);
+  }
 
-const { lat, lng } = normalizedLocation;
+  const { lat, lng } = normalizedLocation;
 
   const candidateResult = await findCandidateRef({
     candidateId,
@@ -207,7 +232,7 @@ const { lat, lng } = normalizedLocation;
 
   const existingPlaceSnap = await db
     .collection("places")
-    .where("googlePlaceId", "==", googlePlaceId)
+    .where("origin.googlePlaceId", "==", googlePlaceId)
     .limit(1)
     .get();
 
@@ -219,23 +244,37 @@ const { lat, lng } = normalizedLocation;
   const placeId = placeRef.id;
 
   const now = FieldValue.serverTimestamp();
+  const adminUid = adminUser?.uid || "admin_uid_or_system";
 
   const h3Resolution = 9;
   const placeHexId = latLngToCell(lat, lng, h3Resolution);
 
   const normalizedPhotos = normalizeGooglePhotoReferences(photos);
   const mainPhoto = getMainPhoto(normalizedPhotos);
-  const normalizedSchedule = normalizeSchedule(schedule);
+
+  const normalizedOpeningHours = normalizeOpeningHours(
+    openingHours || schedule || null
+  );
+
+  const normalizedPriceRangeId = normalizePriceRangeId(
+    priceRangeId || price || null
+  );
 
   const placeData = {
     placeId,
-    googlePlaceId,
-    source,
-    status,
 
-    createdFromSubmissionId: null,
-    createdBy: null,
-    approvedBy: adminUser?.uid || "admin_uid_or_system",
+    origin: {
+      type: "google_candidate",
+      googlePlaceId,
+      submissionId: null,
+      candidateId: candidateRef.id,
+      submittedBy: null,
+      approvedBy: adminUid,
+      approvedAt: now,
+    },
+
+    status,
+    createdBy: adminUid,
 
     name: name.trim(),
     description: description.trim(),
@@ -254,15 +293,33 @@ const { lat, lng } = normalizedLocation;
     tagLabel,
     subtags,
     approaches,
-    price: normalizePrice(price),
 
-    schedule: normalizedSchedule,
-    isOpenNow: false,
-    lastScheduleCheckAt: null,
+    priceRangeId: normalizedPriceRangeId,
 
-    photos: normalizedPhotos,
-    mainPhoto,
-    photoCount: normalizedPhotos.length,
+    googleData: {
+      rating: googleData.rating ?? candidateData.rating ?? null,
+      userRatingCount:
+        googleData.userRatingCount ?? candidateData.userRatingCount ?? null,
+      googleMapsUri:
+        googleData.googleMapsUri ?? candidateData.googleMapsUri ?? null,
+      googleDataFetchedAt:
+        googleData.googleDataFetchedAt ??
+        candidateData.googleDataFetchedAt ??
+        null,
+    },
+
+    trend: {
+      score: 0,
+      weeklyViews: 0,
+      weeklyLikes: 0,
+      weeklySaves: 0,
+      weeklyPhotos: 0,
+      weeklyReviews: 0,
+      weeklyRatingAverage: 0,
+      calculatedAt: null,
+      periodStart: null,
+      periodEnd: null,
+    },
 
     metrics: {
       viewsCount: 0,
@@ -271,46 +328,24 @@ const { lat, lng } = normalizedLocation;
       sharesCount: 0,
       commentsCount: 0,
       ratingsCount: 0,
+      reportsCount: 0,
+      ratingSum: 0,
+      internalRating: 0,
+      ratingConfidence: 0,
+      photoProposalsCount: 0,
       averageRating: 0,
     },
 
-    trend: {
-      score: 0,
-      weeklyViews: 0,
-      weeklyLikes: 0,
-      weeklySaves: 0,
-      weeklyRatingAverage: 0,
-      calculatedAt: null,
-      periodStart: null,
-      periodEnd: null,
-    },
+    openingHours: normalizedOpeningHours,
 
-    googleData: {
-      googleMainType:
-        googleData.googleMainType || candidateData.googleMainType || null,
-
-      types: Array.isArray(googleData.types)
-        ? googleData.types
-        : Array.isArray(candidateData.types)
-          ? candidateData.types
-          : [],
-
-      rating: googleData.rating ?? null,
-      userRatingCount: googleData.userRatingCount ?? null,
-      priceLevel: googleData.priceLevel || null,
-      googleMapsUri: googleData.googleMapsUri || null,
-      openingHours: googleData.openingHours || null,
-
-      googleDataFetchedAt: candidateData.googleDataFetchedAt || null,
-      googleDataExpiresAt: candidateData.googleDataExpiresAt || null,
-    },
-
-    createdAt: now,
-    updatedAt: now,
-    publishedAt: now,
-    lastInteractionAt: null,
-    lastImportedAt: candidateData.createdAt || null,
     deletedAt: null,
+    updatedAt: now,
+    createdAt: now,
+    lastInteractionAt: null,
+
+    photos: normalizedPhotos,
+    mainPhoto,
+    photoCount: normalizedPhotos.length,
   };
 
   await db.runTransaction(async (transaction) => {
@@ -320,7 +355,7 @@ const { lat, lng } = normalizedLocation;
       status: "accepted",
       createdPlaceId: placeId,
       acceptedAt: now,
-      reviewedBy: adminUser?.uid || "admin_uid_or_system",
+      reviewedBy: adminUid,
       updatedAt: now,
     });
   });

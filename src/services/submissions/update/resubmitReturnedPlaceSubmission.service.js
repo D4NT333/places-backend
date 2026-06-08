@@ -1,5 +1,8 @@
 import { db, FieldValue } from "../../../config/firebase.js";
 
+const MIN_PHOTOS = 3;
+const MAX_PHOTOS = 6;
+
 function createHttpError(message, statusCode = 400) {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -96,17 +99,20 @@ function applyPhotoCorrections(currentPhotos = [], photoCorrections = []) {
 
   const deletedIndexes = new Set();
   const replacedPhotosByIndex = new Map();
+  const addedPhotos = [];
 
   photoCorrections.forEach((correction) => {
     const type = correction?.type;
     const photoIndex = Number(correction?.photoIndex);
 
-    if (!Number.isInteger(photoIndex) || photoIndex < 0) {
-      return;
-    }
+    if (type === "delete" || type === "replace") {
+      if (!Number.isInteger(photoIndex) || photoIndex < 0) {
+        return;
+      }
 
-    if (photoIndex >= basePhotos.length) {
-      return;
+      if (photoIndex >= basePhotos.length) {
+        return;
+      }
     }
 
     if (type === "delete") {
@@ -127,10 +133,29 @@ function applyPhotoCorrections(currentPhotos = [], photoCorrections = []) {
         replacedPhotoIndex: photoIndex,
         replacedOldPhotoId: correction.oldPhotoId || null,
       });
+
+      return;
+    }
+
+    if (type === "add") {
+      const nextPhoto = correction?.photo;
+
+      if (!nextPhoto || typeof nextPhoto !== "object") {
+        return;
+      }
+
+      addedPhotos.push({
+        photoIndex: Number.isInteger(photoIndex) ? photoIndex : 9999,
+        photo: {
+          ...nextPhoto,
+          addedPhotoIndex: Number.isInteger(photoIndex) ? photoIndex : null,
+          addedTempPhotoId: correction.tempPhotoId || null,
+        },
+      });
     }
   });
 
-  const nextPhotos = basePhotos
+  const correctedBasePhotos = basePhotos
     .map((photo, index) => {
       if (deletedIndexes.has(index)) {
         return null;
@@ -144,7 +169,11 @@ function applyPhotoCorrections(currentPhotos = [], photoCorrections = []) {
     })
     .filter(Boolean);
 
-  return nextPhotos;
+  const sortedAddedPhotos = addedPhotos
+    .sort((a, b) => a.photoIndex - b.photoIndex)
+    .map((item) => item.photo);
+
+  return [...correctedBasePhotos, ...sortedAddedPhotos];
 }
 
 function buildSubmissionUpdateData({ correctedFields, submissionData }) {
@@ -259,12 +288,28 @@ function buildSubmissionUpdateData({ correctedFields, submissionData }) {
     updateData.location = normalizeLocation(correctedFields.location);
   }
 
-  if (hasOwn(correctedFields, "photos")) {
-    updateData.photos = applyPhotoCorrections(
-      submissionData.photos,
-      correctedFields.photos
+ if (hasOwn(correctedFields, "photos")) {
+  const nextPhotos = applyPhotoCorrections(
+    submissionData.photos,
+    correctedFields.photos
+  );
+
+  if (nextPhotos.length < MIN_PHOTOS) {
+    throw createHttpError(
+      `La propuesta debe conservar al menos ${MIN_PHOTOS} fotos.`,
+      400
     );
   }
+
+  if (nextPhotos.length > MAX_PHOTOS) {
+    throw createHttpError(
+      `La propuesta no puede tener más de ${MAX_PHOTOS} fotos.`,
+      400
+    );
+  }
+
+  updateData.photos = nextPhotos;
+}
 
   return updateData;
 }
