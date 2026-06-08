@@ -9,6 +9,8 @@ import getPlacesFeedController from "../../controllers/places/getPlacesFeed.cont
 import getPlaceDetailController from "../../controllers/places/getPlaceDetail.controller.js";
 import getGooglePlacePhotoController from "../../controllers/places/getGooglePlacePhoto.controller.js";
 
+import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
+
 const router = Router();
 
 /**
@@ -31,6 +33,6 @@ router.get("/feed", getPlacesFeedController);
 
 router.get("/photos/google", getGooglePlacePhotoController);
 
-router.get("/:placeId/detail", getPlaceDetailController);
+router.get("/:placeId/detail", verifyFirebaseToken, getPlaceDetailController);
 
 export default router;  

@@ -14,6 +14,7 @@ export default async function getPlaceDetailController(req, res, next) {
     const result = await getPlaceDetailService({
       placeId,
       baseUrl: getBaseUrl(req),
+      uid: req.user?.uid,
     });
 
     return res.status(200).json(result);

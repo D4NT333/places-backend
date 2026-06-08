@@ -1,6 +1,7 @@
 import { db } from "../../../config/firebase.js";
 
 const SUBTAGS_COLLECTION = "subtag";
+const TAGS_COLLECTION = "tag";
 
 function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -77,6 +78,137 @@ function normalizePhotos(photos, mainPhoto, baseUrl) {
       order: photo.order,
     }))
     .filter((photo) => Boolean(photo.url));
+}
+
+function normalizeReviewDate(value) {
+  if (!value) return null;
+
+  if (typeof value.toDate === "function") {
+    return value.toDate().toISOString();
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  return null;
+}
+
+function normalizeReviewItem(doc) {
+  const review = doc.data();
+
+  return {
+    id: doc.id,
+
+    placeId: cleanText(review.placeId),
+
+    userId: cleanText(review.userId),
+    userName: cleanText(review.userName) || "Usuario",
+    userPhoto: cleanText(review.userPhoto) || null,
+
+    rating: toNumberOrZero(review.rating),
+    recommended: Boolean(review.recommended),
+
+    hasDetails: Boolean(review.hasDetails),
+
+    matchesAnnouncement:
+      typeof review.matchesAnnouncement === "boolean"
+        ? review.matchesAnnouncement
+        : null,
+
+    answers: Array.isArray(review.answers) ? review.answers : [],
+
+    commentText: cleanText(review.commentText),
+
+    tagId: cleanText(review.tagId),
+    tagLabel: cleanText(review.tagLabel),
+
+    createdAt: normalizeReviewDate(review.createdAt),
+  };
+}
+
+async function getCurrentUserReview(placeDocId, uid) {
+  const cleanUid = cleanText(uid);
+
+  if (!cleanUid) return null;
+
+  try {
+    const reviewDoc = await db
+      .collection("placeReviews")
+      .doc(`${placeDocId}_${cleanUid}`)
+      .get();
+
+    if (!reviewDoc.exists) return null;
+
+    const review = reviewDoc.data();
+
+    if (review.deletedAt) return null;
+    if (cleanText(review.status) !== "published") return null;
+
+    return normalizeReviewItem(reviewDoc);
+  } catch (error) {
+    console.error("Error obteniendo reseña del usuario actual:", error);
+    return null;
+  }
+}
+
+async function getRecentLsearchReviews(placeDocId, options = {}) {
+  const cleanPlaceId = cleanText(placeDocId);
+  const excludeUserId = cleanText(options.excludeUserId);
+  const limit = Number(options.limit) || 3;
+
+  if (!cleanPlaceId) return [];
+
+  try {
+    const snapshot = await db
+      .collection("placeReviews")
+      .where("placeId", "==", cleanPlaceId)
+      .orderBy("createdAt", "desc")
+      .limit(limit + 5)
+      .get();
+
+    return snapshot.docs
+      .map(normalizeReviewItem)
+      .filter((review) => review.rating > 0)
+      .filter((review) => cleanText(review.userId) !== excludeUserId)
+      .slice(0, limit);
+  } catch (error) {
+    console.error("Error obteniendo reseñas internas:", error);
+    return [];
+  }
+}
+
+async function getTagLabelById(tagId, fallbackLabel = "") {
+  const cleanTagId = cleanText(tagId);
+  const cleanFallbackLabel = cleanText(fallbackLabel);
+
+  if (!cleanTagId) {
+    return cleanFallbackLabel;
+  }
+
+  try {
+    const tagDoc = await db
+      .collection(TAGS_COLLECTION)
+      .doc(cleanTagId)
+      .get();
+
+    if (!tagDoc.exists) {
+      return cleanFallbackLabel || cleanTagId;
+    }
+
+    const tag = tagDoc.data();
+
+    return (
+      cleanText(tag.label) ||
+      cleanText(tag.name) ||
+      cleanText(tag.title) ||
+      cleanFallbackLabel ||
+      cleanTagId
+    );
+  } catch (error) {
+    console.error("Error obteniendo label de tag:", error);
+    return cleanFallbackLabel || cleanTagId;
+  }
 }
 
 async function getSubtagLabelById(subtagId) {
@@ -171,7 +303,31 @@ async function findPlaceDocById(placeId) {
   return null;
 }
 
-export default async function getPlaceDetailService({ placeId, baseUrl }) {
+function normalizeRecommendationPercent(place) {
+  const metrics = place?.metrics || {};
+
+  const recommendationRate = Number(metrics.recommendationRate);
+
+  if (Number.isFinite(recommendationRate) && recommendationRate > 0) {
+    return Math.round(recommendationRate * 100);
+  }
+
+  const recommendationsCount = Number(metrics.recommendationsCount) || 0;
+  const recommendationsPositiveCount =
+    Number(metrics.recommendationsPositiveCount) || 0;
+
+  if (recommendationsCount <= 0) return 0;
+
+  return Math.round(
+    (recommendationsPositiveCount / recommendationsCount) * 100
+  );
+}
+
+export default async function getPlaceDetailService({
+  placeId,
+  baseUrl,
+  uid,
+}) {
   const placeDoc = await findPlaceDocById(placeId);
 
   if (!placeDoc) {
@@ -196,12 +352,10 @@ export default async function getPlaceDetailService({ placeId, baseUrl }) {
 
   const subtagsWithLabels = await normalizeSubtagsWithLabels(place.subtags);
 
-  const tagLabel = cleanText(place.tagLabel);
+  const tagId = cleanText(place.tagId);
+  const tagLabel = await getTagLabelById(tagId, place.tagLabel);
 
-  const tags = [
-    tagLabel,
-    ...subtagsWithLabels,
-  ].filter(Boolean);
+  const tags = [tagLabel, ...subtagsWithLabels].filter(Boolean);
 
   const googleRating = normalizeGoogleRating(place);
   const lsearchRating = normalizeLsearchRating(place);
@@ -214,6 +368,20 @@ export default async function getPlaceDetailService({ placeId, baseUrl }) {
   const commentsCount = toNumberOrZero(place?.metrics?.commentsCount);
 
   const images = normalizePhotos(place.photos, place.mainPhoto, baseUrl);
+
+  const currentUserReview = await getCurrentUserReview(placeDoc.id, uid);
+  const hasCurrentUserReview = Boolean(currentUserReview);
+
+  const recentLsearchReviews = await getRecentLsearchReviews(placeDoc.id, {
+    excludeUserId: uid,
+    limit: 3,
+  });
+
+  const lsearchReviews = currentUserReview
+    ? [currentUserReview, ...recentLsearchReviews]
+    : recentLsearchReviews;
+
+  const recommendsPercent = normalizeRecommendationPercent(place);
 
   return {
     place: {
@@ -236,18 +404,22 @@ export default async function getPlaceDetailService({ placeId, baseUrl }) {
 
       tags,
 
-      tagId: cleanText(place.tagId),
+      tagId,
       tagLabel,
       subtags: subtagsWithLabels,
       approaches: normalizeStringArray(place.approaches),
 
       googleMapsUri: cleanText(place?.googleData?.googleMapsUri),
 
+      currentUserReview,
+      hasCurrentUserReview,
+      canAddReview: !hasCurrentUserReview,
+
       lsearchSummary: {
         averageRating: lsearchRating,
         ratingsCount: lsearchRatingsCount,
         commentsCount,
-        recommendsPercent: 0,
+        recommendsPercent,
       },
 
       googleSummary: {
@@ -265,7 +437,7 @@ export default async function getPlaceDetailService({ placeId, baseUrl }) {
       },
     },
 
-    lsearchReviews: [],
+    lsearchReviews,
     googleReviews: [],
   };
 }
