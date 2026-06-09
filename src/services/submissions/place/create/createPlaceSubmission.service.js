@@ -1,4 +1,4 @@
-import { db, FieldValue } from "../../../config/firebase.js";
+import { db, FieldValue } from "../../../../config/firebase.js";
 
 export default async function createPlaceSubmissionService({ payload, uid }) {
   console.log("========== PLACE SUBMISSION RECIBIDA ==========");

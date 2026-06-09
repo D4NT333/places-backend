@@ -1,4 +1,4 @@
-import { db, FieldValue } from "../../../config/firebase.js";
+import { db, FieldValue } from "../../../../config/firebase.js";
 
 const MIN_PHOTOS = 3;
 const MAX_PHOTOS = 6;

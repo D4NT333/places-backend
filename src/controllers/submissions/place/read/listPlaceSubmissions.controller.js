@@ -1,4 +1,4 @@
-import listPlaceSubmissionsService from "../../../services/submissions/read/listPlaceSubmissions.service.js";
+import listPlaceSubmissionsService from "../../../../services/submissions/place/read/listPlaceSubmissions.service.js";
 
 export default async function listPlaceSubmissionsController(req, res) {
   try {

@@ -1,4 +1,4 @@
-import getMyRejectedPlaceSubmissionReasonService from "../../../services/submissions/read/getMyRejectedPlaceSubmissionReason.service.js";
+import getMyRejectedPlaceSubmissionReasonService from "../../../../services/submissions/place/read/getMyRejectedPlaceSubmissionReason.service.js";
 
 export default async function getMyRejectedPlaceSubmissionReasonController(
   req,

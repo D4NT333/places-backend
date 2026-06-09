@@ -1,4 +1,4 @@
-import resubmitReturnedPlaceSubmissionService from "../../../services/submissions/update/resubmitReturnedPlaceSubmission.service.js";
+import resubmitReturnedPlaceSubmissionService from "../../../../services/submissions/place/update/resubmitReturnedPlaceSubmission.service.js";
 
 export default async function resubmitReturnedPlaceSubmissionController(req, res) {
   try {

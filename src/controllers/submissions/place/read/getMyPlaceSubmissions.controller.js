@@ -1,4 +1,4 @@
-import getMyPlaceSubmissionsService from "../../../services/submissions/read/getMyPlaceSubmissions.service.js";
+import getMyPlaceSubmissionsService from "../../../../services/submissions/place/read/getMyPlaceSubmissions.service.js";
 
 export default async function getMyPlaceSubmissionsController(req, res) {
   try {

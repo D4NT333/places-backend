@@ -1,4 +1,4 @@
-import getReturnedPlaceSubmissionReviewService from "../../../services/submissions/read/getReturnedPlaceSubmissionReview.service.js";
+import getReturnedPlaceSubmissionReviewService from "../../../../services/submissions/place/read/getReturnedPlaceSubmissionReview.service.js";
 
 export default async function getReturnedPlaceSubmissionReviewController(
   req,

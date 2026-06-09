@@ -1,4 +1,4 @@
-import rejectPlaceSubmissionService from "../../../services/submissions/update/rejectPlaceSubmission.service.js";
+import rejectPlaceSubmissionService from "../../../../services/submissions/place/update/rejectPlaceSubmission.service.js";
 
 export default async function rejectPlaceSubmissionController(req, res) {
   try {

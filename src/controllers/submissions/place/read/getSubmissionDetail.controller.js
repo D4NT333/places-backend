@@ -1,4 +1,4 @@
-import getSubmissionDetailService from "../../../services/submissions/read/getSubmissionDetail.service.js";
+import getSubmissionDetailService from "../../../../services/submissions/place/read/getSubmissionDetail.service.js";
 
 export default async function getSubmissionDetailController(req, res) {
   try {

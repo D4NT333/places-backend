@@ -1,4 +1,4 @@
-import { db } from "../../../config/firebase.js";
+import { db } from "../../../../config/firebase.js";
 import getUsersMapByIdsService from "./getUsersMapByIds.service.js";
 
 const VALID_STATUSES = [

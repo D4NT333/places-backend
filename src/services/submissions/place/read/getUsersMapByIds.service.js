@@ -1,4 +1,4 @@
-import { db } from "../../../config/firebase.js";
+import { db } from "../../../../config/firebase.js";
 
 export default async function getUsersMapByIdsService(userIds = []) {
   const cleanUserIds = [...new Set(userIds)].filter(Boolean);

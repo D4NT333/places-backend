@@ -1,15 +1,15 @@
 import { Router } from "express";
-import createPlaceSubmissionController from "../../controllers/submissions/create/createPlaceSubmission.controller.js";
-import listPlaceSubmissionsController from "../../controllers/submissions/read/listPlaceSubmissions.controller.js";
-import getSubmissionDetailController from "../../controllers/submissions/read/getSubmissionDetail.controller.js";
-import getMyPlaceSubmissionsController from "../../controllers/submissions/read/getMyPlaceSubmissions.controller.js";
-import getMyPlaceSubmissionDetailController from "../../controllers/submissions/read/getMyPlaceSubmissionDetail.controller.js";
-import returnPlaceSubmissionController from "../../controllers/submissions/create/returnPlaceSubmission.controller.js";
-import getReturnedPlaceSubmissionEditDataController from "../../controllers/submissions/read/getReturnedPlaceSubmissionEditData.controller.js";
-import resubmitReturnedPlaceSubmissionController from "../../controllers/submissions/update/resubmitReturnedPlaceSubmission.controller.js";
-import getReturnedPlaceSubmissionReviewController from "../../controllers/submissions/read/getReturnedPlaceSubmissionReview.controller.js";
-import rejectPlaceSubmissionController from "../../controllers/submissions/update/rejectPlaceSubmission.controller.js";
-import getMyRejectedPlaceSubmissionReasonController from "../../controllers/submissions/read/getMyRejectedPlaceSubmissionReason.controller.js";
+import createPlaceSubmissionController from "../../controllers/submissions/place/create/createPlaceSubmission.controller.js";
+import listPlaceSubmissionsController from "../../controllers/submissions/place/read/listPlaceSubmissions.controller.js";
+import getSubmissionDetailController from "../../controllers/submissions/place/read/getSubmissionDetail.controller.js";
+import getMyPlaceSubmissionsController from "../../controllers/submissions/place/read/getMyPlaceSubmissions.controller.js";
+import getMyPlaceSubmissionDetailController from "../../controllers/submissions/place/read/getMyPlaceSubmissionDetail.controller.js";
+import returnPlaceSubmissionController from "../../controllers/submissions/place/create/returnPlaceSubmission.controller.js";
+import getReturnedPlaceSubmissionEditDataController from "../../controllers/submissions/place/read/getReturnedPlaceSubmissionEditData.controller.js";
+import resubmitReturnedPlaceSubmissionController from "../../controllers/submissions/place/update/resubmitReturnedPlaceSubmission.controller.js";
+import getReturnedPlaceSubmissionReviewController from "../../controllers/submissions/place/read/getReturnedPlaceSubmissionReview.controller.js";
+import rejectPlaceSubmissionController from "../../controllers/submissions/place/update/rejectPlaceSubmission.controller.js";
+import getMyRejectedPlaceSubmissionReasonController from "../../controllers/submissions/place/read/getMyRejectedPlaceSubmissionReason.controller.js";
 
 import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
 

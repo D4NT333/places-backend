@@ -1,5 +1,5 @@
-import { firebaseAdmin } from "../../../config/firebase.js";
-import createPlaceSubmissionService from "../../../services/submissions/create/createPlaceSubmission.service.js";
+import { firebaseAdmin } from "../../../../config/firebase.js";
+import createPlaceSubmissionService from "../../../../services/submissions/place/create/createPlaceSubmission.service.js";
 
 export default async function createPlaceSubmissionController(req, res) {
   try {

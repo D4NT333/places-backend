@@ -1,4 +1,4 @@
-import getReturnedPlaceSubmissionEditDataService from "../../../services/submissions/read/getReturnedPlaceSubmissionEditData.service.js";
+import getReturnedPlaceSubmissionEditDataService from "../../../../services/submissions/place/read/getReturnedPlaceSubmissionEditData.service.js";
 
 export default async function getReturnedPlaceSubmissionEditDataController(
   req,

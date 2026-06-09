@@ -1,4 +1,4 @@
-import { db, FieldValue } from "../../../config/firebase.js";
+import { db, FieldValue } from "../../../../config/firebase.js";
 
 const DEFAULT_OPENING_HOURS = {
   type: "not_specified",
