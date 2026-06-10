@@ -7,6 +7,7 @@ import placeSubmissionRoutes from "../routes/submissions/placeSubmissions.routes
 import notificationRoutes from "../routes/notifications/notifications.routes.js";
 import usersRoutes from "../routes/users/users.routes.js";
 import reviewsRoutes from "../routes/reviews/reviews.routes.js";
+import descriptionSubmissionRoutes from "../routes/submissions/descriptionSubmissions.routes.js";
 
 
 const app = express();
@@ -21,6 +22,8 @@ app.use("/api/feed", feedRoutes);
 app.use("/api/auth", authenticationRoutes);
 
 app.use("/api", placeSubmissionRoutes);
+
+app.use("/api", descriptionSubmissionRoutes);
 
 app.use("/api/notifications", notificationRoutes);
 
