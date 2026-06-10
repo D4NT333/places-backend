@@ -2,7 +2,7 @@ import { db } from "../../../../config/firebase.js";
 
 const DESCRIPTION_SUBMISSIONS_COLLECTION = "descriptionSubmissions";
 
-const VALID_STATUSES = ["in_review", "accepted", "rejected"];
+const VALID_STATUSES = ["in_review", "approved", "rejected"];
 
 function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -32,22 +32,44 @@ function buildPhotoUrl(baseUrl, mainPhoto) {
   )}`;
 }
 
-function normalizeStatusLabel(status) {
+function normalizeStatus(status) {
   const cleanStatus = cleanText(status);
+
+  if (
+    cleanStatus === "in_review" ||
+    cleanStatus === "inReview" ||
+    cleanStatus === "pending"
+  ) {
+    return "in_review";
+  }
+
+  if (cleanStatus === "approved" || cleanStatus === "accepted") {
+    return "approved";
+  }
+
+  if (cleanStatus === "rejected") {
+    return "rejected";
+  }
+
+  return "in_review";
+}
+
+function normalizeStatusLabel(status) {
+  const normalizedStatus = normalizeStatus(status);
 
   const labels = {
     in_review: "Pendiente",
-    accepted: "Aceptada",
+    approved: "Aprobada",
     rejected: "Rechazada",
   };
 
-  return labels[cleanStatus] || cleanStatus || "Pendiente";
+  return labels[normalizedStatus] || "Pendiente";
 }
 
 function normalizeSubmissionDoc(doc, baseUrl) {
   const submission = doc.data();
 
-  const status = cleanText(submission.status) || "in_review";
+  const status = normalizeStatus(submission.status);
   const mainPhoto = submission.placeSnapshot?.mainPhoto || null;
 
   return {
@@ -107,7 +129,7 @@ export default async function getDescriptionSubmissionsService({
   limit = 50,
   baseUrl,
 }) {
-  const cleanStatus = cleanText(status);
+  const cleanStatus = normalizeStatus(status);
 
   const cleanLimit = Number(limit);
   const finalLimit =
@@ -117,18 +139,13 @@ export default async function getDescriptionSubmissionsService({
 
   let query = db
     .collection(DESCRIPTION_SUBMISSIONS_COLLECTION)
-    .where("deletedAt", "==", null)
-    .orderBy("createdAt", "desc")
-    .limit(finalLimit);
+    .where("deletedAt", "==", null);
 
-  if (cleanStatus && VALID_STATUSES.includes(cleanStatus)) {
-    query = db
-      .collection(DESCRIPTION_SUBMISSIONS_COLLECTION)
-      .where("deletedAt", "==", null)
-      .where("status", "==", cleanStatus)
-      .orderBy("createdAt", "desc")
-      .limit(finalLimit);
+  if (status && VALID_STATUSES.includes(cleanStatus)) {
+    query = query.where("status", "==", cleanStatus);
   }
+
+  query = query.orderBy("createdAt", "desc").limit(finalLimit);
 
   const snapshot = await query.get();
 

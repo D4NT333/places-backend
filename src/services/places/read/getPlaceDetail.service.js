@@ -152,6 +152,45 @@ async function getCurrentUserReview(placeDocId, uid) {
   }
 }
 
+async function getCurrentUserDescriptionSubmission(placeDocId, uid) {
+  const cleanUid = cleanText(uid);
+  const cleanPlaceId = cleanText(placeDocId);
+
+  if (!cleanUid || !cleanPlaceId) return null;
+
+  try {
+    const snapshot = await db
+      .collection("descriptionSubmissions")
+      .where("createdBy.uid", "==", cleanUid)
+      .where("placeId", "==", cleanPlaceId)
+      .where("type", "==", "description")
+      .where("status", "==", "in_review")
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) return null;
+
+    const doc = snapshot.docs[0];
+    const data = doc.data();
+
+    if (data.deletedAt) return null;
+
+    return {
+      id: doc.id,
+      submissionId: data.submissionId || doc.id,
+      status: cleanText(data.status) || "in_review",
+      type: cleanText(data.type) || "description",
+    };
+  } catch (error) {
+    console.error(
+      "Error obteniendo propuesta de descripción en revisión:",
+      error
+    );
+
+    return null;
+  }
+}
+
 async function getRecentLsearchReviews(placeDocId, options = {}) {
   const cleanPlaceId = cleanText(placeDocId);
   const excludeUserId = cleanText(options.excludeUserId);
@@ -372,6 +411,13 @@ export default async function getPlaceDetailService({
   const currentUserReview = await getCurrentUserReview(placeDoc.id, uid);
   const hasCurrentUserReview = Boolean(currentUserReview);
 
+  const currentUserDescriptionSubmission =
+  await getCurrentUserDescriptionSubmission(placeDoc.id, uid);
+
+const hasCurrentUserDescriptionInReview = Boolean(
+  currentUserDescriptionSubmission
+);
+
   const recentLsearchReviews = await getRecentLsearchReviews(placeDoc.id, {
     excludeUserId: uid,
     limit: 3,
@@ -414,6 +460,10 @@ export default async function getPlaceDetailService({
       currentUserReview,
       hasCurrentUserReview,
       canAddReview: !hasCurrentUserReview,
+
+      currentUserDescriptionSubmission,
+      hasCurrentUserDescriptionInReview,
+      canSubmitDescription: !hasCurrentUserDescriptionInReview,
 
       lsearchSummary: {
         averageRating: lsearchRating,
