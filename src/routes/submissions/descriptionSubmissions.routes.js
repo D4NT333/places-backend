@@ -8,6 +8,7 @@ import getMyDescriptionSubmissionsController from "../../controllers/submissions
 import getMyDescriptionSubmissionDetailController from "../../controllers/submissions/description/read/getMyDescriptionSubmissionDetail.controller.js";
 import approveDescriptionSubmissionController from "../../controllers/submissions/description/update/approveDescriptionSubmission.controller.js";
 import rejectDescriptionSubmissionController from "../../controllers/submissions/description/update/rejectDescriptionSubmission.controller.js";
+import getDescriptionSubmissionRejectionReasonController from "../../controllers/submissions/description/read/getDescriptionSubmissionRejectionReason.controller.js";
 
 const router = Router();
 
@@ -24,5 +25,7 @@ router.get("/description-submissions/:submissionId",verifyFirebaseToken,getDescr
 router.patch("/description-submissions/:submissionId/approve",verifyFirebaseToken,approveDescriptionSubmissionController);
 
 router.patch("/description-submissions/:submissionId/reject",verifyFirebaseToken,rejectDescriptionSubmissionController);
+
+router.get("/description-submissions/:submissionId/rejection-reason",verifyFirebaseToken,getDescriptionSubmissionRejectionReasonController);
 
 export default router;
