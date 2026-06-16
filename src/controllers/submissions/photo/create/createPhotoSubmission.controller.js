@@ -5,6 +5,11 @@ const PHOTO_SUBMISSIONS_COLLECTION =
 
 const PLACES_COLLECTION = "places";
 
+const TAGS_COLLECTION = "tag";
+const SUBTAGS_COLLECTION = "subtag";
+const APPROACHES_COLLECTION =
+  "approach";
+
 const MIN_PHOTOS = 1;
 const MAX_PHOTOS = 6;
 
@@ -12,6 +17,140 @@ function cleanString(value) {
   return typeof value === "string"
     ? value.trim()
     : "";
+}
+
+async function getCatalogLabel(
+  collectionName,
+  documentId
+) {
+  const normalizedDocumentId =
+    cleanString(documentId);
+
+  if (!normalizedDocumentId) {
+    return "";
+  }
+
+  const documentSnapshot = await db
+    .collection(collectionName)
+    .doc(normalizedDocumentId)
+    .get();
+
+  if (!documentSnapshot.exists) {
+    console.warn(
+      `No se encontró ${collectionName}/${normalizedDocumentId}`
+    );
+
+    return "";
+  }
+
+  const documentData =
+    documentSnapshot.data() || {};
+
+  return cleanString(
+    documentData.label
+  );
+}
+
+async function getTagSnapshot(
+  placeData
+) {
+  const tagId =
+    cleanString(placeData?.tagId);
+
+  let tagLabel =
+    cleanString(placeData?.tagLabel);
+
+  if (tagId && !tagLabel) {
+    tagLabel =
+      await getCatalogLabel(
+        TAGS_COLLECTION,
+        tagId
+      );
+  }
+
+  return {
+    tagId,
+    tagLabel,
+  };
+}
+
+async function getSubtagsSnapshot(
+  placeData
+) {
+  const subtagIds =
+    Array.isArray(placeData?.subtags)
+      ? placeData.subtags
+          .map(cleanString)
+          .filter(Boolean)
+      : [];
+
+  return Promise.all(
+    subtagIds.map(
+      async (subtagId) => {
+        const subtagLabel =
+          await getCatalogLabel(
+            SUBTAGS_COLLECTION,
+            subtagId
+          );
+
+        return {
+          subtagId,
+          subtagLabel,
+        };
+      }
+    )
+  );
+}
+
+async function getApproachesSnapshot(
+  placeData
+) {
+  const approachIds =
+    Array.isArray(
+      placeData?.approaches
+    )
+      ? placeData.approaches
+          .map(cleanString)
+          .filter(Boolean)
+      : [];
+
+  return Promise.all(
+    approachIds.map(
+      async (approachId) => {
+        const approachLabel =
+          await getCatalogLabel(
+            APPROACHES_COLLECTION,
+            approachId
+          );
+
+        return {
+          approachId,
+          approachLabel,
+        };
+      }
+    )
+  );
+}
+
+async function getPlaceClassificationSnapshot(
+  placeData
+) {
+  const [
+    tag,
+    subtags,
+    approaches,
+  ] = await Promise.all([
+    getTagSnapshot(placeData),
+    getSubtagsSnapshot(placeData),
+    getApproachesSnapshot(placeData),
+  ]);
+
+  return {
+    tagId: tag.tagId,
+    tagLabel: tag.tagLabel,
+    subtags,
+    approaches,
+  };
 }
 
 function normalizePhoto(photo) {
@@ -257,6 +396,11 @@ export default async function createPhotoSubmissionController(
     const placeData =
       placeSnapshot.data() || {};
 
+    const classificationSnapshot =
+      await getPlaceClassificationSnapshot(
+        placeData
+      );
+
     /*
      * Evitamos una segunda propuesta pendiente
      * del mismo usuario para el mismo lugar.
@@ -364,6 +508,18 @@ export default async function createPhotoSubmissionController(
         cleanString(placeData.name) ||
         "Lugar sin nombre",
 
+      tagId:
+        classificationSnapshot.tagId,
+
+      tagLabel:
+        classificationSnapshot.tagLabel,
+
+      subtags:
+        classificationSnapshot.subtags,
+
+      approaches:
+        classificationSnapshot.approaches,
+
       createdBy: userId,
       createdByName: userName,
 
@@ -439,4 +595,4 @@ export default async function createPhotoSubmissionController(
         "No se pudo registrar la propuesta de fotografías.",
     });
   }
-}
+}``
