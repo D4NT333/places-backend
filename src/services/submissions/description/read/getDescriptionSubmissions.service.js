@@ -1,18 +1,44 @@
 import { db } from "../../../../config/firebase.js";
 
-const DESCRIPTION_SUBMISSIONS_COLLECTION = "descriptionSubmissions";
+const DESCRIPTION_SUBMISSIONS_COLLECTION =
+  "descriptionSubmissions";
 
-const VALID_STATUSES = ["in_review", "approved", "rejected"];
+const VALID_STATUSES = [
+  "all",
+  "in_review",
+  "approved",
+  "rejected",
+];
+
+/*
+ * Incluye también nombres antiguos que tu normalizador reconoce.
+ * pending_delete no está aquí, por lo que nunca llegará al listado normal.
+ */
+const VISIBLE_DATABASE_STATUSES = [
+  "in_review",
+  "inReview",
+  "pending",
+  "approved",
+  "accepted",
+  "rejected",
+];
 
 function cleanText(value) {
-  return typeof value === "string" ? value.trim() : "";
+  return typeof value === "string"
+    ? value.trim()
+    : "";
 }
 
 function normalizeTimestamp(value) {
   if (!value) return null;
 
-  if (typeof value.toDate === "function") {
-    return value.toDate().toISOString();
+  if (
+    typeof value.toDate ===
+    "function"
+  ) {
+    return value
+      .toDate()
+      .toISOString();
   }
 
   if (value instanceof Date) {
@@ -22,10 +48,18 @@ function normalizeTimestamp(value) {
   return null;
 }
 
-function buildPhotoUrl(baseUrl, mainPhoto) {
-  const reference = cleanText(mainPhoto?.reference);
+function buildPhotoUrl(
+  baseUrl,
+  mainPhoto
+) {
+  const reference =
+    cleanText(
+      mainPhoto?.reference
+    );
 
-  if (!reference) return null;
+  if (!reference) {
+    return null;
+  }
 
   return `${baseUrl}/api/places/photos/google?reference=${encodeURIComponent(
     reference
@@ -33,29 +67,44 @@ function buildPhotoUrl(baseUrl, mainPhoto) {
 }
 
 function normalizeStatus(status) {
-  const cleanStatus = cleanText(status);
+  const cleanStatus =
+    cleanText(status);
 
   if (
-    cleanStatus === "in_review" ||
-    cleanStatus === "inReview" ||
-    cleanStatus === "pending"
+    cleanStatus ===
+      "in_review" ||
+    cleanStatus ===
+      "inReview" ||
+    cleanStatus ===
+      "pending"
   ) {
     return "in_review";
   }
 
-  if (cleanStatus === "approved" || cleanStatus === "accepted") {
+  if (
+    cleanStatus ===
+      "approved" ||
+    cleanStatus ===
+      "accepted"
+  ) {
     return "approved";
   }
 
-  if (cleanStatus === "rejected") {
+  if (
+    cleanStatus ===
+    "rejected"
+  ) {
     return "rejected";
   }
 
   return "in_review";
 }
 
-function normalizeStatusLabel(status) {
-  const normalizedStatus = normalizeStatus(status);
+function normalizeStatusLabel(
+  status
+) {
+  const normalizedStatus =
+    normalizeStatus(status);
 
   const labels = {
     in_review: "Pendiente",
@@ -63,91 +112,285 @@ function normalizeStatusLabel(status) {
     rejected: "Rechazada",
   };
 
-  return labels[normalizedStatus] || "Pendiente";
+  return (
+    labels[normalizedStatus] ||
+    "Pendiente"
+  );
 }
 
-function normalizeSubmissionDoc(doc, baseUrl) {
-  const submission = doc.data();
+function normalizeSubmissionDoc(
+  doc,
+  baseUrl
+) {
+  const submission =
+    doc.data();
 
-  const status = normalizeStatus(submission.status);
-  const mainPhoto = submission.placeSnapshot?.mainPhoto || null;
+  const status =
+    normalizeStatus(
+      submission.status
+    );
+
+  const mainPhoto =
+    submission.placeSnapshot
+      ?.mainPhoto ||
+    null;
 
   return {
-    id: doc.id,
-    submissionId: cleanText(submission.submissionId) || doc.id,
+    id:
+      doc.id,
 
-    type: cleanText(submission.type) || "description",
+    submissionId:
+      cleanText(
+        submission.submissionId
+      ) || doc.id,
+
+    type:
+      cleanText(
+        submission.type
+      ) || "description",
+
     status,
-    statusLabel: normalizeStatusLabel(status),
 
-    placeId: cleanText(submission.placeId),
-    placeDocId: cleanText(submission.placeDocId),
+    statusLabel:
+      normalizeStatusLabel(
+        status
+      ),
+
+    placeId:
+      cleanText(
+        submission.placeId
+      ),
+
+    placeDocId:
+      cleanText(
+        submission.placeDocId
+      ),
+
     placeName:
-      cleanText(submission.placeName) ||
-      cleanText(submission.placeSnapshot?.name) ||
+      cleanText(
+        submission.placeName
+      ) ||
+      cleanText(
+        submission
+          .placeSnapshot
+          ?.name
+      ) ||
       "Lugar sin nombre",
 
-    currentDescription: cleanText(submission.currentDescription),
-    proposedDescription: cleanText(submission.proposedDescription),
+    currentDescription:
+      cleanText(
+        submission
+          .currentDescription
+      ),
 
-    preview: cleanText(submission.proposedDescription),
+    proposedDescription:
+      cleanText(
+        submission
+          .proposedDescription
+      ),
+
+    preview:
+      cleanText(
+        submission
+          .proposedDescription
+      ),
 
     placeSnapshot: {
-      name: cleanText(submission.placeSnapshot?.name),
-      address: cleanText(submission.placeSnapshot?.address),
+      name:
+        cleanText(
+          submission
+            .placeSnapshot
+            ?.name
+        ),
+
+      address:
+        cleanText(
+          submission
+            .placeSnapshot
+            ?.address
+        ),
+
       mainPhoto,
-      mainPhotoUrl: buildPhotoUrl(baseUrl, mainPhoto),
-      tagId: cleanText(submission.placeSnapshot?.tagId),
-      tagLabel: cleanText(submission.placeSnapshot?.tagLabel),
-      subtags: Array.isArray(submission.placeSnapshot?.subtags)
-        ? submission.placeSnapshot.subtags
-        : [],
-      approaches: Array.isArray(submission.placeSnapshot?.approaches)
-        ? submission.placeSnapshot.approaches
-        : [],
+
+      mainPhotoUrl:
+        buildPhotoUrl(
+          baseUrl,
+          mainPhoto
+        ),
+
+      tagId:
+        cleanText(
+          submission
+            .placeSnapshot
+            ?.tagId
+        ),
+
+      tagLabel:
+        cleanText(
+          submission
+            .placeSnapshot
+            ?.tagLabel
+        ),
+
+      subtags:
+        Array.isArray(
+          submission
+            .placeSnapshot
+            ?.subtags
+        )
+          ? submission
+              .placeSnapshot
+              .subtags
+          : [],
+
+      approaches:
+        Array.isArray(
+          submission
+            .placeSnapshot
+            ?.approaches
+        )
+          ? submission
+              .placeSnapshot
+              .approaches
+          : [],
     },
 
     createdBy: {
-      uid: cleanText(submission.createdBy?.uid),
-      email: cleanText(submission.createdBy?.email),
-      name: cleanText(submission.createdBy?.name) || "Usuario",
-      picture: cleanText(submission.createdBy?.picture) || null,
+      uid:
+        cleanText(
+          submission
+            .createdBy
+            ?.uid
+        ),
+
+      email:
+        cleanText(
+          submission
+            .createdBy
+            ?.email
+        ),
+
+      name:
+        cleanText(
+          submission
+            .createdBy
+            ?.name
+        ) ||
+        "Usuario",
+
+      picture:
+        cleanText(
+          submission
+            .createdBy
+            ?.picture
+        ) ||
+        null,
     },
 
-    reviewedBy: submission.reviewedBy || null,
-    reviewedAt: normalizeTimestamp(submission.reviewedAt),
-    reviewMessage: cleanText(submission.reviewMessage),
+    reviewedBy:
+      submission.reviewedBy ||
+      null,
 
-    createdAt: normalizeTimestamp(submission.createdAt),
-    updatedAt: normalizeTimestamp(submission.updatedAt),
-    deletedAt: normalizeTimestamp(submission.deletedAt),
+    reviewedAt:
+      normalizeTimestamp(
+        submission.reviewedAt
+      ),
+
+    reviewMessage:
+      cleanText(
+        submission.reviewMessage
+      ),
+
+    createdAt:
+      normalizeTimestamp(
+        submission.createdAt
+      ),
+
+    updatedAt:
+      normalizeTimestamp(
+        submission.updatedAt
+      ),
+
+    deletedAt:
+      normalizeTimestamp(
+        submission.deletedAt
+      ),
   };
 }
 
 export default async function getDescriptionSubmissionsService({
-  status,
+  status = "all",
   limit = 50,
   baseUrl,
 }) {
-  const cleanStatus = normalizeStatus(status);
+  const requestedStatus =
+    cleanText(status) ||
+    "all";
 
-  const cleanLimit = Number(limit);
+  if (
+    !VALID_STATUSES.includes(
+      requestedStatus
+    )
+  ) {
+    throw new Error(
+      "Estado de propuesta inválido."
+    );
+  }
+
+  const cleanLimit =
+    Number(limit);
+
   const finalLimit =
-    Number.isFinite(cleanLimit) && cleanLimit > 0 && cleanLimit <= 100
+    Number.isFinite(
+      cleanLimit
+    ) &&
+    cleanLimit > 0 &&
+    cleanLimit <= 100
       ? cleanLimit
       : 50;
 
   let query = db
-    .collection(DESCRIPTION_SUBMISSIONS_COLLECTION)
-    .where("deletedAt", "==", null);
+    .collection(
+      DESCRIPTION_SUBMISSIONS_COLLECTION
+    )
+    .where(
+      "deletedAt",
+      "==",
+      null
+    );
 
-  if (status && VALID_STATUSES.includes(cleanStatus)) {
-    query = query.where("status", "==", cleanStatus);
+  if (
+    requestedStatus ===
+    "all"
+  ) {
+    query = query.where(
+      "status",
+      "in",
+      VISIBLE_DATABASE_STATUSES
+    );
+  } else {
+    query = query.where(
+      "status",
+      "==",
+      requestedStatus
+    );
   }
 
-  query = query.orderBy("createdAt", "desc").limit(finalLimit);
+  query = query
+    .orderBy(
+      "createdAt",
+      "desc"
+    )
+    .limit(finalLimit);
 
-  const snapshot = await query.get();
+  const snapshot =
+    await query.get();
 
-  return snapshot.docs.map((doc) => normalizeSubmissionDoc(doc, baseUrl));
+  return snapshot.docs.map(
+    (doc) =>
+      normalizeSubmissionDoc(
+        doc,
+        baseUrl
+      )
+  );
 }

@@ -10,6 +10,14 @@ const VALID_STATUSES = [
   "rejected",
 ];
 
+const VISIBLE_STATUSES = [
+  "in_review",
+  "approved",
+  "returned",
+  "resubmitted",
+  "rejected",
+];
+
 function normalizeLimit(limit) {
   const parsedLimit = Number(limit);
 
@@ -17,7 +25,10 @@ function normalizeLimit(limit) {
     return 15;
   }
 
-  return Math.min(Math.max(parsedLimit, 1), 30);
+  return Math.min(
+    Math.max(parsedLimit, 1),
+    30
+  );
 }
 
 function formatTimestamp(timestamp) {
@@ -25,10 +36,15 @@ function formatTimestamp(timestamp) {
     return null;
   }
 
-  return timestamp.toDate().toISOString();
+  return timestamp
+    .toDate()
+    .toISOString();
 }
 
-function getPhotoUrl(photo, preferredSize = "thumbnail") {
+function getPhotoUrl(
+  photo,
+  preferredSize = "thumbnail"
+) {
   if (!photo) return null;
 
   if (preferredSize === "thumbnail") {
@@ -66,12 +82,21 @@ function getPhotoUrl(photo, preferredSize = "thumbnail") {
   );
 }
 
-function getFirstPhotoUrl(photos = [], preferredSize = "thumbnail") {
-  if (!Array.isArray(photos) || photos.length === 0) {
+function getFirstPhotoUrl(
+  photos = [],
+  preferredSize = "thumbnail"
+) {
+  if (
+    !Array.isArray(photos) ||
+    photos.length === 0
+  ) {
     return null;
   }
 
-  return getPhotoUrl(photos[0], preferredSize);
+  return getPhotoUrl(
+    photos[0],
+    preferredSize
+  );
 }
 
 function mapUserDisplayName(user) {
@@ -93,14 +118,24 @@ function mapUserPhotoUrl(user) {
     return null;
   }
 
-  return user.photoURL || user.photoUrl || user.avatarUrl || null;
+  return (
+    user.photoURL ||
+    user.photoUrl ||
+    user.avatarUrl ||
+    null
+  );
 }
 
-function getUniqueUserIds(submissions = []) {
+function getUniqueUserIds(
+  submissions = []
+) {
   return [
     ...new Set(
       submissions
-        .map((submission) => submission.createdBy)
+        .map(
+          (submission) =>
+            submission.createdBy
+        )
         .filter(Boolean)
     ),
   ];
@@ -111,87 +146,206 @@ export default async function listPlaceSubmissionsService({
   limit = 15,
   cursor = null,
 }) {
-  if (!VALID_STATUSES.includes(status)) {
-    throw new Error("Estado de submission inválido.");
+  if (
+    !VALID_STATUSES.includes(status)
+  ) {
+    throw new Error(
+      "Estado de submission inválido."
+    );
   }
 
-  const finalLimit = normalizeLimit(limit);
+  const finalLimit =
+    normalizeLimit(limit);
 
-  console.log("========== LIST PLACE SUBMISSIONS SERVICE ==========");
-  console.log("Status recibido:", status);
-  console.log("Limit recibido:", limit);
-  console.log("Limit final:", finalLimit);
-  console.log("Cursor recibido:", cursor);
+  console.log(
+    "========== LIST PLACE SUBMISSIONS SERVICE =========="
+  );
+  console.log(
+    "Status recibido:",
+    status
+  );
+  console.log(
+    "Limit recibido:",
+    limit
+  );
+  console.log(
+    "Limit final:",
+    finalLimit
+  );
+  console.log(
+    "Cursor recibido:",
+    cursor
+  );
 
-  let query = db
-    .collection("placeSubmissions")
-    .orderBy("createdAt", "desc")
-    .limit(finalLimit);
+  let query;
 
-  if (status !== "all") {
+  if (status === "all") {
     query = db
-      .collection("placeSubmissions")
-      .where("status", "==", status)
-      .orderBy("createdAt", "desc")
-      .limit(finalLimit);
+      .collection(
+        "placeSubmissions"
+      )
+      .where(
+        "status",
+        "in",
+        VISIBLE_STATUSES
+      )
+      .orderBy(
+        "createdAt",
+        "desc"
+      )
+      .limit(
+        finalLimit
+      );
+  } else {
+    query = db
+      .collection(
+        "placeSubmissions"
+      )
+      .where(
+        "status",
+        "==",
+        status
+      )
+      .orderBy(
+        "createdAt",
+        "desc"
+      )
+      .limit(
+        finalLimit
+      );
   }
 
   if (cursor) {
     const cursorDoc = await db
-      .collection("placeSubmissions")
+      .collection(
+        "placeSubmissions"
+      )
       .doc(cursor)
       .get();
 
     if (cursorDoc.exists) {
-      query = query.startAfter(cursorDoc);
+      query = query.startAfter(
+        cursorDoc
+      );
     }
   }
 
-  const snapshot = await query.get();
+  const snapshot =
+    await query.get();
 
-  const submissions = snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  const submissions =
+    snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
 
-  console.log("Submissions encontradas:", submissions.length);
+  console.log(
+    "Submissions encontradas:",
+    submissions.length
+  );
 
-  const userIds = getUniqueUserIds(submissions);
+  const userIds =
+    getUniqueUserIds(
+      submissions
+    );
 
-  console.log("User IDs encontrados:", userIds);
+  console.log(
+    "User IDs encontrados:",
+    userIds
+  );
 
-  const usersMap = await getUsersMapByIdsService(userIds);
+  const usersMap =
+    await getUsersMapByIdsService(
+      userIds
+    );
 
-  console.log("Usuarios encontrados:", Object.keys(usersMap).length);
+  console.log(
+    "Usuarios encontrados:",
+    Object.keys(usersMap).length
+  );
 
-  const items = submissions.map((submission) => {
-    const user = usersMap[submission.createdBy];
+  const items =
+    submissions.map(
+      (submission) => {
+        const user =
+          usersMap[
+            submission.createdBy
+          ];
 
-    return {
-      id: submission.id,
-      placeSubmissionId: submission.placeSubmissionId || submission.id,
+        return {
+          id:
+            submission.id,
 
-      name: submission.name || "Lugar sin nombre",
-      status: submission.status || "unknown",
-      createdAt: formatTimestamp(submission.createdAt),
+          placeSubmissionId:
+            submission.placeSubmissionId ||
+            submission.id,
 
-      userId: submission.createdBy || null,
-      userName: mapUserDisplayName(user),
-      userPhotoUrl: mapUserPhotoUrl(user),
+          name:
+            submission.name ||
+            "Lugar sin nombre",
 
-      placePhotoUrl: getFirstPhotoUrl(submission.photos, "thumbnail"),
+          status:
+            submission.status ||
+            "unknown",
 
-      reviewCycle: submission.reviewCycle || 1,
-      wasReturnedBefore: Boolean(submission.wasReturnedBefore),
-    };
-  });
+          createdAt:
+            formatTimestamp(
+              submission.createdAt
+            ),
 
-  const lastDoc = snapshot.docs[snapshot.docs.length - 1];
-  const nextCursor = lastDoc ? lastDoc.id : null;
+          userId:
+            submission.createdBy ||
+            null,
 
-  console.log("Items finales:", items.length);
-  console.log("Next cursor:", nextCursor);
-  console.log("====================================================");
+          userName:
+            mapUserDisplayName(
+              user
+            ),
+
+          userPhotoUrl:
+            mapUserPhotoUrl(
+              user
+            ),
+
+          placePhotoUrl:
+            getFirstPhotoUrl(
+              submission.photos,
+              "thumbnail"
+            ),
+
+          reviewCycle:
+            submission.reviewCycle ||
+            1,
+
+          wasReturnedBefore:
+            Boolean(
+              submission.wasReturnedBefore
+            ),
+        };
+      }
+    );
+
+  const lastDoc =
+    snapshot.docs[
+      snapshot.docs.length - 1
+    ];
+
+  const nextCursor =
+    lastDoc
+      ? lastDoc.id
+      : null;
+
+  console.log(
+    "Items finales:",
+    items.length
+  );
+  console.log(
+    "Next cursor:",
+    nextCursor
+  );
+  console.log(
+    "===================================================="
+  );
 
   return {
     items,
