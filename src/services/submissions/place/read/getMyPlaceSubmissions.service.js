@@ -1,5 +1,14 @@
 import { db } from "../../../../config/firebase.js";
 
+const VISIBLE_STATUSES = [
+  "in_review",
+  "pending",
+  "returned",
+  "resubmitted",
+  "rejected",
+  "approved",
+];
+
 function formatFirestoreDate(value) {
   if (!value) return null;
 
@@ -14,7 +23,10 @@ function formatFirestoreDate(value) {
   return value;
 }
 
-function getPhotoUrl(photo, preferredSize = "thumbnail") {
+function getPhotoUrl(
+  photo,
+  preferredSize = "thumbnail"
+) {
   if (!photo) return null;
 
   if (typeof photo === "string") {
@@ -83,6 +95,23 @@ function getPhotoUrl(photo, preferredSize = "thumbnail") {
   );
 }
 
+function getFirstPhotoUrl(
+  photos = [],
+  preferredSize = "thumbnail"
+) {
+  if (
+    !Array.isArray(photos) ||
+    photos.length === 0
+  ) {
+    return null;
+  }
+
+  return getPhotoUrl(
+    photos[0],
+    preferredSize
+  );
+}
+
 function getThumbnailUrl(data) {
   if (!data) return null;
 
@@ -90,43 +119,82 @@ function getThumbnailUrl(data) {
     data.thumbnailUrl ||
     data.thumbnailPhotoUrl ||
     data.coverPhotoUrl ||
-    getFirstPhotoUrl(data.photos, "thumbnail") ||
-    getFirstPhotoUrl(data.images, "thumbnail") ||
-    getFirstPhotoUrl(data.photoUrls, "thumbnail") ||
+    getFirstPhotoUrl(
+      data.photos,
+      "thumbnail"
+    ) ||
+    getFirstPhotoUrl(
+      data.images,
+      "thumbnail"
+    ) ||
+    getFirstPhotoUrl(
+      data.photoUrls,
+      "thumbnail"
+    ) ||
     null
   );
-}
-
-function getFirstPhotoUrl(photos = [], preferredSize = "thumbnail") {
-  if (!Array.isArray(photos) || photos.length === 0) {
-    return null;
-  }
-
-  return getPhotoUrl(photos[0], preferredSize);
 }
 
 function mapSubmissionDoc(doc) {
   const data = doc.data();
 
   return {
-    id: data.placeSubmissionId || doc.id,
+    id:
+      data.placeSubmissionId ||
+      doc.id,
 
-    name: data.name || "Lugar sin nombre",
-    imageUrl: getThumbnailUrl(data),
+    name:
+      data.name ||
+      "Lugar sin nombre",
 
-    tagId: data.tagId || null,
-    tag: data.tagLabel || "Sin categoría",
+    imageUrl:
+      getThumbnailUrl(data),
 
-    subtags: Array.isArray(data.subtags) ? data.subtags : [],
-    approaches: Array.isArray(data.approaches) ? data.approaches : [],
+    tagId:
+      data.tagId ||
+      null,
 
-    price: data.price || null,
-    status: data.status || "in_review",
+    tag:
+      data.tagLabel ||
+      "Sin categoría",
 
-    createdAt: formatFirestoreDate(data.createdAt),
-    updatedAt: formatFirestoreDate(data.updatedAt),
-    returnedAt: formatFirestoreDate(data.returnedAt),
-    resubmittedAt: formatFirestoreDate(data.resubmittedAt),
+    subtags:
+      Array.isArray(data.subtags)
+        ? data.subtags
+        : [],
+
+    approaches:
+      Array.isArray(data.approaches)
+        ? data.approaches
+        : [],
+
+    price:
+      data.price ||
+      null,
+
+    status:
+      data.status ||
+      "in_review",
+
+    createdAt:
+      formatFirestoreDate(
+        data.createdAt
+      ),
+
+    updatedAt:
+      formatFirestoreDate(
+        data.updatedAt
+      ),
+
+    returnedAt:
+      formatFirestoreDate(
+        data.returnedAt
+      ),
+
+    resubmittedAt:
+      formatFirestoreDate(
+        data.resubmittedAt
+      ),
   };
 }
 
@@ -136,37 +204,93 @@ export default async function getMyPlaceSubmissionsService({
   cursor = null,
 }) {
   if (!uid) {
-    throw new Error("Falta uid para obtener propuestas del usuario.");
+    throw new Error(
+      "Falta uid para obtener propuestas del usuario."
+    );
   }
 
-  const safeLimit = Math.min(Number(limit) || 10, 20);
+  const parsedLimit = Number(limit);
+
+  const safeLimit = Math.min(
+    Number.isFinite(parsedLimit)
+      ? parsedLimit
+      : 10,
+    20
+  );
 
   let query = db
-    .collection("placeSubmissions")
-    .where("createdBy", "==", uid)
-    .orderBy("createdAt", "desc")
-    .limit(safeLimit + 1);
+    .collection(
+      "placeSubmissions"
+    )
+    .where(
+      "createdBy",
+      "==",
+      uid
+    )
+    .where(
+      "status",
+      "in",
+      VISIBLE_STATUSES
+    )
+    .orderBy(
+      "createdAt",
+      "desc"
+    )
+    .limit(
+      safeLimit + 1
+    );
 
   if (cursor) {
-    const cursorDate = new Date(cursor);
+    const cursorDate =
+      new Date(cursor);
 
-    if (!Number.isNaN(cursorDate.getTime())) {
-      query = query.startAfter(cursorDate);
+    if (
+      !Number.isNaN(
+        cursorDate.getTime()
+      )
+    ) {
+      query = query.startAfter(
+        cursorDate
+      );
     }
   }
 
-  const snapshot = await query.get();
+  const snapshot =
+    await query.get();
 
-  const docs = snapshot.docs;
-  const hasMore = docs.length > safeLimit;
-  const visibleDocs = hasMore ? docs.slice(0, safeLimit) : docs;
+  const docs =
+    snapshot.docs;
 
-  const items = visibleDocs.map(mapSubmissionDoc);
-  const lastItem = items[items.length - 1];
+  const hasMore =
+    docs.length > safeLimit;
+
+  const visibleDocs =
+    hasMore
+      ? docs.slice(
+          0,
+          safeLimit
+        )
+      : docs;
+
+  const items =
+    visibleDocs.map(
+      mapSubmissionDoc
+    );
+
+  const lastItem =
+    items[
+      items.length - 1
+    ];
 
   return {
     items,
-    nextCursor: hasMore ? lastItem?.createdAt || null : null,
+
+    nextCursor:
+      hasMore
+        ? lastItem?.createdAt ||
+          null
+        : null,
+
     hasMore,
   };
 }

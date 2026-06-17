@@ -3,6 +3,12 @@ import { db } from "../../../../config/firebase.js";
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 30;
 
+const VISIBLE_STATUSES = [
+  "in_review",
+  "approved",
+  "rejected",
+];
+
 const STATUS_LABELS = {
   in_review: "En revisión",
   approved: "Aprobado",
@@ -12,6 +18,7 @@ const STATUS_LABELS = {
 function createHttpError(statusCode, message) {
   const error = new Error(message);
   error.statusCode = statusCode;
+
   return error;
 }
 
@@ -50,8 +57,13 @@ function buildGooglePhotoUrl(reference) {
 }
 
 function getMainPhotoUrl(submissionData) {
-  const placeSnapshot = submissionData.placeSnapshot || {};
-  const mainPhoto = placeSnapshot.mainPhoto || submissionData.mainPhoto || null;
+  const placeSnapshot =
+    submissionData.placeSnapshot || {};
+
+  const mainPhoto =
+    placeSnapshot.mainPhoto ||
+    submissionData.mainPhoto ||
+    null;
 
   if (!mainPhoto) return null;
 
@@ -63,16 +75,31 @@ function getMainPhotoUrl(submissionData) {
     return mainPhoto.url;
   }
 
+  if (mainPhoto.medium?.url) {
+    return mainPhoto.medium.url;
+  }
+
+  if (mainPhoto.thumbnail?.url) {
+    return mainPhoto.thumbnail.url;
+  }
+
   if (mainPhoto.downloadURL) {
     return mainPhoto.downloadURL;
   }
 
-  if (mainPhoto.source === "google" && mainPhoto.reference) {
-    return buildGooglePhotoUrl(mainPhoto.reference);
+  if (
+    mainPhoto.source === "google" &&
+    mainPhoto.reference
+  ) {
+    return buildGooglePhotoUrl(
+      mainPhoto.reference
+    );
   }
 
   if (mainPhoto.reference) {
-    return buildGooglePhotoUrl(mainPhoto.reference);
+    return buildGooglePhotoUrl(
+      mainPhoto.reference
+    );
   }
 
   return null;
@@ -81,7 +108,9 @@ function getMainPhotoUrl(submissionData) {
 function getPreviewText(value = "") {
   const text = String(value).trim();
 
-  if (text.length <= 85) return text;
+  if (text.length <= 85) {
+    return text;
+  }
 
   return `${text.slice(0, 85)}...`;
 }
@@ -89,58 +118,135 @@ function getPreviewText(value = "") {
 function normalizeSubmission(doc) {
   const data = doc.data();
 
-  const status = data.status || "in_review";
+  const status =
+    data.status ||
+    "in_review";
 
   return {
     id: doc.id,
-    submissionId: data.submissionId || doc.id,
 
-    type: data.type || "description",
+    submissionId:
+      data.submissionId ||
+      doc.id,
+
+    type:
+      data.type ||
+      "description",
+
     status,
-    statusLabel: STATUS_LABELS[status] || status,
 
-    placeId: data.placeId || data.placeDocId || null,
-    placeDocId: data.placeDocId || data.placeId || null,
+    statusLabel:
+      STATUS_LABELS[status] ||
+      status,
+
+    placeId:
+      data.placeId ||
+      data.placeDocId ||
+      null,
+
+    placeDocId:
+      data.placeDocId ||
+      data.placeId ||
+      null,
 
     placeName:
       data.placeName ||
       data.placeSnapshot?.name ||
       "Lugar sin nombre",
 
-    proposedDescription: data.proposedDescription || "",
-    descriptionPreview: getPreviewText(data.proposedDescription || ""),
+    proposedDescription:
+      data.proposedDescription ||
+      "",
 
-    currentDescription: data.currentDescription || "",
+    descriptionPreview:
+      getPreviewText(
+        data.proposedDescription ||
+        ""
+      ),
 
-    imageUrl: getMainPhotoUrl(data),
+    currentDescription:
+      data.currentDescription ||
+      "",
 
-    createdAt: normalizeTimestamp(data.createdAt),
-    updatedAt: normalizeTimestamp(data.updatedAt),
+    imageUrl:
+      getMainPhotoUrl(data),
 
-    reviewedAt: normalizeTimestamp(data.reviewedAt),
-    reviewMessage: data.reviewMessage || null,
+    createdAt:
+      normalizeTimestamp(
+        data.createdAt
+      ),
 
-    canDelete: status === "approved" || status === "rejected",
+    updatedAt:
+      normalizeTimestamp(
+        data.updatedAt
+      ),
+
+    reviewedAt:
+      normalizeTimestamp(
+        data.reviewedAt
+      ),
+
+    reviewMessage:
+      data.reviewMessage ||
+      null,
+
+    canDelete:
+      status === "approved" ||
+      status === "rejected",
   };
 }
 
-async function getMyDescriptionSubmissionsService({ userId, limit }) {
+async function getMyDescriptionSubmissionsService({
+  userId,
+  limit,
+}) {
   if (!userId) {
-    throw createHttpError(401, "Usuario no autenticado.");
+    throw createHttpError(
+      401,
+      "Usuario no autenticado."
+    );
   }
 
-  const safeLimit = normalizeLimit(limit);
+  const safeLimit =
+    normalizeLimit(limit);
 
   const snapshot = await db
-    .collection("descriptionSubmissions")
-    .where("createdBy.uid", "==", userId)
-    .where("type", "==", "description")
-    .where("deletedAt", "==", null)
-    .orderBy("createdAt", "desc")
-    .limit(safeLimit)
+    .collection(
+      "descriptionSubmissions"
+    )
+    .where(
+      "createdBy.uid",
+      "==",
+      userId
+    )
+    .where(
+      "type",
+      "==",
+      "description"
+    )
+    .where(
+      "deletedAt",
+      "==",
+      null
+    )
+    .where(
+      "status",
+      "in",
+      VISIBLE_STATUSES
+    )
+    .orderBy(
+      "createdAt",
+      "desc"
+    )
+    .limit(
+      safeLimit
+    )
     .get();
 
-  const submissions = snapshot.docs.map(normalizeSubmission);
+  const submissions =
+    snapshot.docs.map(
+      normalizeSubmission
+    );
 
   return {
     submissions,

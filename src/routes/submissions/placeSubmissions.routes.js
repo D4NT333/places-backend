@@ -10,6 +10,8 @@ import resubmitReturnedPlaceSubmissionController from "../../controllers/submiss
 import getReturnedPlaceSubmissionReviewController from "../../controllers/submissions/place/read/getReturnedPlaceSubmissionReview.controller.js";
 import rejectPlaceSubmissionController from "../../controllers/submissions/place/update/rejectPlaceSubmission.controller.js";
 import getMyRejectedPlaceSubmissionReasonController from "../../controllers/submissions/place/read/getMyRejectedPlaceSubmissionReason.controller.js";
+import approvePlaceSubmissionController from "../../controllers/submissions/place/update/approvePlaceSubmission.controller.js"
+import requestDeleteSubmissionController from "../../controllers/submissions/requestDeleteSubmission.controller.js"
 
 import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
 
@@ -36,5 +38,9 @@ router.get("/admin/place-submissions/:submissionId/return",getReturnedPlaceSubmi
 router.post("/admin/place-submissions/:submissionId/reject",rejectPlaceSubmissionController);
 
 router.get("/place-submissions/my-places/:submissionId/rejection",verifyFirebaseToken,getMyRejectedPlaceSubmissionReasonController);
+
+router.patch("/place-submissions/:submissionId/approve",verifyFirebaseToken,approvePlaceSubmissionController);
+
+router.patch("/submissions/:type/:submissionId/delete-request",verifyFirebaseToken,requestDeleteSubmissionController);
 
 export default router;
