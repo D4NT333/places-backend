@@ -1,8 +1,14 @@
 import { db } from "../../config/firebase.js";
 import admin from "firebase-admin";
 
-const PENDING_DELETE_STATUS = "pending_delete";
-const DELETED_SUBMISSIONS_COLLECTION = "deletedSubmissions";
+const PENDING_DELETE_STATUS =
+  "pending_delete";
+
+const DELETED_SUBMISSIONS_COLLECTION =
+  "deletedSubmissions";
+
+const USERS_COLLECTION =
+  "user";
 
 const SUBMISSION_COLLECTIONS = {
   place: "placeSubmissions",
@@ -16,73 +22,168 @@ const ALLOWED_STATUSES = [
   "returned",
   "resubmitted",
   "rejected",
+  "approved",
 ];
 
-function createServiceError(message, statusCode) {
+function createServiceError(
+  message,
+  statusCode
+) {
   const error = new Error(message);
   error.statusCode = statusCode;
 
   return error;
 }
 
+function cleanString(value) {
+  return typeof value === "string"
+    ? value.trim()
+    : "";
+}
+
 function getCollectionName(type) {
-  const collectionName = SUBMISSION_COLLECTIONS[type];
+  const collectionName =
+    SUBMISSION_COLLECTIONS[type];
 
   if (!collectionName) {
-    throw createServiceError("Tipo de propuesta inválido.", 400);
+    throw createServiceError(
+      "Tipo de propuesta inválido.",
+      400
+    );
   }
 
   return collectionName;
 }
 
 function getCreatedByUid(submission) {
-  const createdBy = submission?.createdBy;
+  const createdBy =
+    submission?.createdBy;
 
-  if (typeof createdBy === "string") {
+  if (
+    typeof createdBy === "string"
+  ) {
     return createdBy;
   }
 
-  if (createdBy && typeof createdBy === "object") {
-    return createdBy.uid || "";
+  if (
+    createdBy &&
+    typeof createdBy === "object"
+  ) {
+    return (
+      cleanString(createdBy.uid) ||
+      cleanString(createdBy.userId)
+    );
   }
 
   return "";
 }
 
-function getCreatedByName(submission) {
-  const createdBy = submission?.createdBy;
+function getCreatedByName(
+  submission
+) {
+  const createdBy =
+    submission?.createdBy;
 
   return (
-    submission?.createdByName ||
-    submission?.userName ||
-    createdBy?.name ||
-    createdBy?.displayName ||
+    cleanString(
+      submission?.createdByName
+    ) ||
+    cleanString(
+      submission?.userName
+    ) ||
+    cleanString(createdBy?.name) ||
+    cleanString(
+      createdBy?.displayName
+    ) ||
     "Usuario"
   );
 }
 
-function getSubmissionPublicId(submission, fallbackId) {
+function getUserName(
+  userData,
+  submission
+) {
   return (
-    submission?.submissionId ||
-    submission?.placeSubmissionId ||
-    submission?.photoSubmissionId ||
+    cleanString(userData?.name) ||
+    cleanString(
+      userData?.displayName
+    ) ||
+    cleanString(
+      userData?.userName
+    ) ||
+    getCreatedByName(submission)
+  );
+}
+
+function getUserPhotoURL(
+  userData,
+  submission
+) {
+  return (
+    cleanString(
+      userData?.photoURL
+    ) ||
+    cleanString(
+      userData?.photoUrl
+    ) ||
+    cleanString(
+      userData?.picture
+    ) ||
+    cleanString(
+      userData?.avatarUrl
+    ) ||
+    cleanString(
+      submission?.createdByPhotoURL
+    ) ||
+    cleanString(
+      submission?.userPhotoURL
+    ) ||
+    null
+  );
+}
+
+function getSubmissionPublicId(
+  submission,
+  fallbackId
+) {
+  return (
+    cleanString(
+      submission?.submissionId
+    ) ||
+    cleanString(
+      submission?.placeSubmissionId
+    ) ||
+    cleanString(
+      submission?.photoSubmissionId
+    ) ||
     fallbackId
   );
 }
 
-function getSubmissionTitle(type, submission) {
+function getSubmissionTitle(
+  type,
+  submission
+) {
   if (type === "place") {
     return (
-      submission?.name ||
-      submission?.placeName ||
+      cleanString(submission?.name) ||
+      cleanString(
+        submission?.placeName
+      ) ||
       "Lugar sin nombre"
     );
   }
 
   if (type === "photo") {
-    const count = Number(submission?.photoCount) || 0;
+    const count =
+      Number(
+        submission?.photoCount
+      ) || 0;
+
     const placeName =
-      submission?.placeName ||
+      cleanString(
+        submission?.placeName
+      ) ||
       "lugar sin nombre";
 
     return count > 0
@@ -91,47 +192,98 @@ function getSubmissionTitle(type, submission) {
   }
 
   if (type === "description") {
-    return (
-      `Descripción de ${
-        submission?.placeName ||
-        "lugar sin nombre"
-      }`
-    );
+    const placeName =
+      cleanString(
+        submission?.placeName
+      ) ||
+      "lugar sin nombre";
+
+    return `Descripción de ${placeName}`;
   }
 
   return "Propuesta";
 }
 
-function getSubmissionPreviewImage(type, submission) {
+function getSubmissionPreviewImage(
+  type,
+  submission
+) {
   if (type === "place") {
-    const firstPhoto = Array.isArray(submission?.photos)
-      ? submission.photos[0]
-      : null;
+    const firstPhoto =
+      Array.isArray(
+        submission?.photos
+      )
+        ? submission.photos[0]
+        : null;
 
     return (
-      firstPhoto?.medium?.url ||
-      firstPhoto?.mediumUrl ||
-      firstPhoto?.thumbnail?.url ||
-      firstPhoto?.thumbnailUrl ||
-      submission?.thumbnailUrl ||
+      cleanString(
+        firstPhoto?.medium?.url
+      ) ||
+      cleanString(
+        firstPhoto?.mediumUrl
+      ) ||
+      cleanString(
+        firstPhoto?.thumbnail?.url
+      ) ||
+      cleanString(
+        firstPhoto?.thumbnailUrl
+      ) ||
+      cleanString(
+        submission?.thumbnailUrl
+      ) ||
+      cleanString(
+        submission?.imageUrl
+      ) ||
       null
     );
   }
 
   if (type === "photo") {
+    const firstPhoto =
+      Array.isArray(
+        submission?.photos
+      )
+        ? submission.photos[0]
+        : null;
+
     return (
-      submission?.thumbnailUrl ||
-      submission?.photos?.[0]?.thumbnail?.url ||
-      submission?.photos?.[0]?.medium?.url ||
+      cleanString(
+        submission?.thumbnailUrl
+      ) ||
+      cleanString(
+        firstPhoto?.thumbnail?.url
+      ) ||
+      cleanString(
+        firstPhoto?.thumbnailUrl
+      ) ||
+      cleanString(
+        firstPhoto?.medium?.url
+      ) ||
+      cleanString(
+        firstPhoto?.mediumUrl
+      ) ||
       null
     );
   }
 
   if (type === "description") {
     return (
-      submission?.imageUrl ||
-      submission?.placeSnapshot?.mainPhoto?.url ||
-      submission?.placeSnapshot?.mainPhoto?.medium?.url ||
+      cleanString(
+        submission?.imageUrl
+      ) ||
+      cleanString(
+        submission?.placeSnapshot
+          ?.mainPhoto?.url
+      ) ||
+      cleanString(
+        submission?.placeSnapshot
+          ?.mainPhoto?.medium?.url
+      ) ||
+      cleanString(
+        submission?.placeSnapshot
+          ?.mainPhoto?.mediumUrl
+      ) ||
       null
     );
   }
@@ -139,7 +291,10 @@ function getSubmissionPreviewImage(type, submission) {
   return null;
 }
 
-function buildDeletedSubmissionId(type, submissionPublicId) {
+function buildDeletedSubmissionId(
+  type,
+  submissionPublicId
+) {
   return `${type}_${submissionPublicId}`;
 }
 
@@ -149,133 +304,257 @@ export default async function requestDeleteSubmissionService({
   userId,
 }) {
   if (!userId) {
-    throw createServiceError("Usuario no autenticado.", 401);
+    throw createServiceError(
+      "Usuario no autenticado.",
+      401
+    );
   }
 
   if (!submissionId) {
-    throw createServiceError("Falta el id de la propuesta.", 400);
+    throw createServiceError(
+      "Falta el id de la propuesta.",
+      400
+    );
   }
 
-  const collectionName = getCollectionName(type);
+  const collectionName =
+    getCollectionName(type);
 
   const submissionRef = db
     .collection(collectionName)
     .doc(submissionId);
 
-  return db.runTransaction(async (transaction) => {
-    const submissionSnap = await transaction.get(submissionRef);
+  const userRef = db
+    .collection(USERS_COLLECTION)
+    .doc(userId);
 
-    if (!submissionSnap.exists) {
-      throw createServiceError("La propuesta no existe.", 404);
-    }
+  return db.runTransaction(
+    async (transaction) => {
+      /*
+       * Firestore exige hacer todas las lecturas
+       * antes de comenzar con escrituras.
+       */
+      const [
+        submissionSnap,
+        userSnap,
+      ] = await Promise.all([
+        transaction.get(
+          submissionRef
+        ),
 
-    const submission = submissionSnap.data();
+        transaction.get(userRef),
+      ]);
 
-    const createdByUid = getCreatedByUid(submission);
+      if (!submissionSnap.exists) {
+        throw createServiceError(
+          "La propuesta no existe.",
+          404
+        );
+      }
 
-    if (createdByUid !== userId) {
-      throw createServiceError(
-        "No puedes eliminar una propuesta que no es tuya.",
-        403
+      const submission =
+        submissionSnap.data() || {};
+
+      const userData =
+        userSnap.exists
+          ? userSnap.data() || {}
+          : {};
+
+      const createdByUid =
+        getCreatedByUid(submission);
+
+      if (createdByUid !== userId) {
+        throw createServiceError(
+          "No puedes eliminar una propuesta que no es tuya.",
+          403
+        );
+      }
+
+      const submissionPublicId =
+        getSubmissionPublicId(
+          submission,
+          submissionId
+        );
+
+      const deletedSubmissionId =
+        buildDeletedSubmissionId(
+          type,
+          submissionPublicId
+        );
+
+      const deletedSubmissionRef =
+        db
+          .collection(
+            DELETED_SUBMISSIONS_COLLECTION
+          )
+          .doc(
+            deletedSubmissionId
+          );
+
+      const userName =
+        getUserName(
+          userData,
+          submission
+        );
+
+      const userPhotoURL =
+        getUserPhotoURL(
+          userData,
+          submission
+        );
+
+      const title =
+        getSubmissionTitle(
+          type,
+          submission
+        );
+
+      const previewImageUrl =
+        getSubmissionPreviewImage(
+          type,
+          submission
+        );
+
+      if (
+        submission.status ===
+        PENDING_DELETE_STATUS
+      ) {
+        const now =
+          admin.firestore.FieldValue
+            .serverTimestamp();
+
+        transaction.set(
+          deletedSubmissionRef,
+          {
+            type,
+
+            sourceCollection:
+              collectionName,
+
+            submissionDocId:
+              submissionId,
+
+            submissionId:
+              submissionPublicId,
+
+            title,
+            previewImageUrl,
+
+            userId,
+            userName,
+            userPhotoURL,
+
+            status:
+              PENDING_DELETE_STATUS,
+
+            requestedAt: now,
+            updatedAt: now,
+
+            alreadyRequested: true,
+          },
+          {
+            merge: true,
+          }
+        );
+
+        return {
+          type,
+          submissionId:
+            submissionPublicId,
+          deletedSubmissionId,
+          status:
+            PENDING_DELETE_STATUS,
+          alreadyRequested: true,
+        };
+      }
+
+      if (
+        !ALLOWED_STATUSES.includes(
+          submission.status
+        )
+      ) {
+        throw createServiceError(
+          "Esta propuesta no se puede enviar a eliminación.",
+          409
+        );
+      }
+
+      const previousStatus =
+        cleanString(
+          submission.status
+        ) || null;
+
+      const now =
+        admin.firestore.FieldValue
+          .serverTimestamp();
+
+      transaction.update(
+        submissionRef,
+        {
+          status:
+            PENDING_DELETE_STATUS,
+
+          deleteRequestedAt: now,
+          deleteRequestedBy:
+            userId,
+
+          deletedByUser: true,
+
+          previousStatus,
+
+          updatedAt: now,
+        }
       );
-    }
 
-    const submissionPublicId = getSubmissionPublicId(
-      submission,
-      submissionId
-    );
-
-    const deletedSubmissionId = buildDeletedSubmissionId(
-      type,
-      submissionPublicId
-    );
-
-    const deletedSubmissionRef = db
-      .collection(DELETED_SUBMISSIONS_COLLECTION)
-      .doc(deletedSubmissionId);
-
-    if (submission.status === PENDING_DELETE_STATUS) {
       transaction.set(
         deletedSubmissionRef,
         {
           type,
-          sourceCollection: collectionName,
-          submissionDocId: submissionId,
-          submissionId: submissionPublicId,
 
-          title: getSubmissionTitle(type, submission),
-          previewImageUrl: getSubmissionPreviewImage(type, submission),
+          sourceCollection:
+            collectionName,
+
+          submissionDocId:
+            submissionId,
+
+          submissionId:
+            submissionPublicId,
+
+          title,
+          previewImageUrl,
 
           userId,
-          userName: getCreatedByName(submission),
+          userName,
+          userPhotoURL,
 
-          status: PENDING_DELETE_STATUS,
-          requestedAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          status:
+            PENDING_DELETE_STATUS,
 
-          alreadyRequested: true,
+          previousStatus,
+
+          requestedAt: now,
+          updatedAt: now,
+
+          alreadyRequested: false,
         },
-        { merge: true }
+        {
+          merge: true,
+        }
       );
 
       return {
         type,
-        submissionId: submissionPublicId,
+
+        submissionId:
+          submissionPublicId,
+
         deletedSubmissionId,
-        status: PENDING_DELETE_STATUS,
-        alreadyRequested: true,
+
+        status:
+          PENDING_DELETE_STATUS,
+
+        alreadyRequested: false,
       };
     }
-
-    if (!ALLOWED_STATUSES.includes(submission.status)) {
-      throw createServiceError(
-        "Esta propuesta no se puede enviar a eliminación.",
-        409
-      );
-    }
-
-    const now = admin.firestore.FieldValue.serverTimestamp();
-
-    transaction.update(submissionRef, {
-      status: PENDING_DELETE_STATUS,
-
-      deleteRequestedAt: now,
-      deleteRequestedBy: userId,
-      deletedByUser: true,
-
-      previousStatus: submission.status || null,
-      updatedAt: now,
-    });
-
-    transaction.set(
-      deletedSubmissionRef,
-      {
-        type,
-        sourceCollection: collectionName,
-        submissionDocId: submissionId,
-        submissionId: submissionPublicId,
-
-        title: getSubmissionTitle(type, submission),
-        previewImageUrl: getSubmissionPreviewImage(type, submission),
-
-        userId,
-        userName: getCreatedByName(submission),
-
-        status: PENDING_DELETE_STATUS,
-        previousStatus: submission.status || null,
-
-        requestedAt: now,
-        updatedAt: now,
-      },
-      { merge: true }
-    );
-
-    return {
-      type,
-      submissionId: submissionPublicId,
-      deletedSubmissionId,
-      status: PENDING_DELETE_STATUS,
-      alreadyRequested: false,
-    };
-  });
+  );
 }
