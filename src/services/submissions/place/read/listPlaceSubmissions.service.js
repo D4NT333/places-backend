@@ -233,11 +233,17 @@ export default async function listPlaceSubmissionsService({
   const snapshot =
     await query.get();
 
-  const submissions =
-    snapshot.docs.map((doc) => ({
+ const submissions =
+  snapshot.docs
+    .map((doc) => ({
       id: doc.id,
       ...doc.data(),
-    }));
+    }))
+    .filter((submission) =>
+      VISIBLE_STATUSES.includes(
+        submission.status
+      )
+    );
 
   console.log(
     "Submissions encontradas:",

@@ -280,11 +280,39 @@ function getCoordinates(data) {
   return null;
 }
 
+function normalizeDisplayLabels(labels, ids) {
+  if (Array.isArray(labels) && labels.length > 0) {
+    return labels
+      .filter((item) => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  if (Array.isArray(ids)) {
+    return ids
+      .filter((item) => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
 function mapSubmissionDetail(doc) {
   const data = doc.data();
   const photos = getPhotos(data);
   const coordinates = getCoordinates(data);
   const openingHours = normalizeOpeningHours(data.openingHours);
+
+  const subtagLabels = normalizeDisplayLabels(
+    data.subtagLabels,
+    data.subtags
+  );
+
+  const approachLabels = normalizeDisplayLabels(
+    data.approachLabels,
+    data.approaches
+  );
 
   return {
     id: data.placeSubmissionId || doc.id,
@@ -303,8 +331,17 @@ function mapSubmissionDetail(doc) {
     tag: data.tagLabel || "Sin categoría",
     tagLabel: data.tagLabel || "Sin categoría",
 
-    subtags: Array.isArray(data.subtags) ? data.subtags : [],
-    approaches: Array.isArray(data.approaches) ? data.approaches : [],
+    subtagIds: Array.isArray(data.subtags)
+  ? data.subtags
+  : [],
+
+subtags: subtagLabels,
+
+approachIds: Array.isArray(data.approaches)
+  ? data.approaches
+  : [],
+
+approaches: approachLabels,
 
     status: data.status || "in_review",
     source: data.source || null,

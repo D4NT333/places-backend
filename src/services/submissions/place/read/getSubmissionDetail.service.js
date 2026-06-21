@@ -178,6 +178,24 @@ function normalizePhotos(photos = []) {
     .filter(Boolean);
 }
 
+function normalizeDisplayLabels(labels, ids) {
+  if (Array.isArray(labels) && labels.length > 0) {
+    return labels
+      .filter((item) => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  if (Array.isArray(ids)) {
+    return ids
+      .filter((item) => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
 export default async function getSubmissionDetailService({ submissionId }) {
   if (!submissionId) {
     throw new Error("ID de submission no proporcionado.");
@@ -219,6 +237,16 @@ export default async function getSubmissionDetailService({ submissionId }) {
   const photos = normalizePhotos(submission.photos);
   const openingHours = normalizeOpeningHours(submission.openingHours);
 
+  const subtagLabels = normalizeDisplayLabels(
+  submission.subtagLabels,
+  submission.subtags
+);
+
+const approachLabels = normalizeDisplayLabels(
+  submission.approachLabels,
+  submission.approaches
+);
+
   console.log("Submission encontrada:", submission.id);
   console.log("Usuario encontrado:", user?.id || null);
   console.log("Fotos normalizadas:", photos.length);
@@ -257,10 +285,17 @@ export default async function getSubmissionDetailService({ submissionId }) {
     tagId: submission.tagId || null,
     tagLabel: submission.tagLabel || null,
 
-    subtags: Array.isArray(submission.subtags) ? submission.subtags : [],
-    approaches: Array.isArray(submission.approaches)
-      ? submission.approaches
-      : [],
+    subtagIds: Array.isArray(submission.subtags)
+  ? submission.subtags
+  : [],
+
+subtags: subtagLabels,
+
+approachIds: Array.isArray(submission.approaches)
+  ? submission.approaches
+  : [],
+
+approaches: approachLabels,
 
     price: submission.price || null,
 

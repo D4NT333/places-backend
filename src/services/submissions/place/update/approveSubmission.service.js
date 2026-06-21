@@ -14,6 +14,36 @@ function cleanString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeReferenceIds(values, prefix) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      values
+        .map((value) => {
+          if (typeof value === "string") {
+            return value.trim();
+          }
+
+          if (value && typeof value === "object") {
+            return cleanString(
+              value.id ||
+                value.value ||
+                value.subtagId ||
+                value.approachId
+            );
+          }
+
+          return "";
+        })
+        .filter(Boolean)
+        .filter((value) => value.startsWith(prefix))
+    ),
+  ];
+}
+
 function normalizeLocation(location) {
   const lat = location?.lat ?? location?.latitude;
   const lng = location?.lng ?? location?.longitude;
@@ -138,6 +168,30 @@ export default async function approvePlaceSubmissionService({
       throw createServiceError("La propuesta no tiene fotos válidas.", 400);
     }
 
+    const normalizedSubtags = normalizeReferenceIds(
+  submission.subtags,
+  "subtag_"
+);
+
+const normalizedApproaches = normalizeReferenceIds(
+  submission.approaches,
+  "approach_"
+);
+
+if (normalizedSubtags.length === 0) {
+  throw createServiceError(
+    "La propuesta no contiene IDs válidos de subetiquetas.",
+    400
+  );
+}
+
+if (normalizedApproaches.length === 0) {
+  throw createServiceError(
+    "La propuesta no contiene IDs válidos de enfoques.",
+    400
+  );
+}
+
     const now = admin.firestore.FieldValue.serverTimestamp();
 
     const placeRef = db.collection(PLACES_COLLECTION).doc();
@@ -159,13 +213,8 @@ export default async function approvePlaceSubmissionService({
       tagId: cleanString(submission.tagId),
       tagLabel: cleanString(submission.tagLabel),
 
-      subtags: Array.isArray(submission.subtags)
-        ? submission.subtags
-        : [],
-
-      approaches: Array.isArray(submission.approaches)
-        ? submission.approaches
-        : [],
+     subtags: normalizedSubtags,
+     approaches: normalizedApproaches,
 
       price: cleanString(submission.price),
       priceRangeId: cleanString(submission.priceRangeId),

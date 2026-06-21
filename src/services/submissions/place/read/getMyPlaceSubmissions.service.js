@@ -135,8 +135,36 @@ function getThumbnailUrl(data) {
   );
 }
 
+function normalizeDisplayLabels(labels, ids) {
+  if (Array.isArray(labels) && labels.length > 0) {
+    return labels
+      .filter((item) => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  if (Array.isArray(ids)) {
+    return ids
+      .filter((item) => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
 function mapSubmissionDoc(doc) {
   const data = doc.data();
+
+  const subtagLabels = normalizeDisplayLabels(
+  data.subtagLabels,
+  data.subtags
+);
+
+const approachLabels = normalizeDisplayLabels(
+  data.approachLabels,
+  data.approaches
+);
 
   return {
     id:
@@ -158,15 +186,19 @@ function mapSubmissionDoc(doc) {
       data.tagLabel ||
       "Sin categoría",
 
-    subtags:
-      Array.isArray(data.subtags)
-        ? data.subtags
-        : [],
+    subtagIds:
+  Array.isArray(data.subtags)
+    ? data.subtags
+    : [],
 
-    approaches:
-      Array.isArray(data.approaches)
-        ? data.approaches
-        : [],
+subtags: subtagLabels,
+
+approachIds:
+  Array.isArray(data.approaches)
+    ? data.approaches
+    : [],
+
+approaches: approachLabels,
 
     price:
       data.price ||

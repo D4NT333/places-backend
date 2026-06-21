@@ -8,6 +8,10 @@ const DEFAULT_OPENING_HOURS = {
   label: "Horario no especificado",
 };
 
+const SUBTAGS_COLLECTION = "subtag";
+const APPROACHES_COLLECTION = "approach";
+
+
 function formatTimestamp(value) {
   if (!value) return null;
 
@@ -255,6 +259,118 @@ function normalizePhoto(photo = {}, index = 0) {
   };
 }
 
+
+function cleanText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+async function getSubtagLabelById(subtagId) {
+  const cleanSubtagId = cleanText(subtagId);
+
+  if (!cleanSubtagId) return "";
+
+  if (!cleanSubtagId.startsWith("subtag_")) {
+    return cleanSubtagId;
+  }
+
+  try {
+    const doc = await db
+      .collection(SUBTAGS_COLLECTION)
+      .doc(cleanSubtagId)
+      .get();
+
+    if (!doc.exists) {
+      return cleanSubtagId;
+    }
+
+    const data = doc.data();
+
+    return (
+      cleanText(data.label) ||
+      cleanText(data.name) ||
+      cleanText(data.title) ||
+      cleanSubtagId
+    );
+  } catch (error) {
+    console.error("Error obteniendo label de subtag:", error);
+    return cleanSubtagId;
+  }
+}
+
+async function getApproachLabelById(approachId) {
+  const cleanApproachId = cleanText(approachId);
+
+  if (!cleanApproachId) return "";
+
+  if (!cleanApproachId.startsWith("approach_")) {
+    return cleanApproachId;
+  }
+
+  try {
+    const doc = await db
+      .collection(APPROACHES_COLLECTION)
+      .doc(cleanApproachId)
+      .get();
+
+    if (!doc.exists) {
+      return cleanApproachId;
+    }
+
+    const data = doc.data();
+
+    return (
+      cleanText(data.label) ||
+      cleanText(data.name) ||
+      cleanText(data.title) ||
+      cleanApproachId
+    );
+  } catch (error) {
+    console.error("Error obteniendo label de approach:", error);
+    return cleanApproachId;
+  }
+}
+
+async function normalizeSubtagDisplayLabels(labels, ids) {
+  if (Array.isArray(labels) && labels.length > 0) {
+    return labels
+      .map(cleanText)
+      .filter(Boolean);
+  }
+
+  const cleanIds = Array.isArray(ids)
+    ? ids.map(cleanText).filter(Boolean)
+    : [];
+
+  const resolvedLabels = await Promise.all(
+    cleanIds.map(getSubtagLabelById)
+  );
+
+  return resolvedLabels
+    .map(cleanText)
+    .filter(Boolean);
+}
+
+async function normalizeApproachDisplayLabels(labels, ids) {
+  if (Array.isArray(labels) && labels.length > 0) {
+    return labels
+      .map(cleanText)
+      .filter(Boolean);
+  }
+
+  const cleanIds = Array.isArray(ids)
+    ? ids.map(cleanText).filter(Boolean)
+    : [];
+
+  const resolvedLabels = await Promise.all(
+    cleanIds.map(getApproachLabelById)
+  );
+
+  return resolvedLabels
+    .map(cleanText)
+    .filter(Boolean);
+}
+
+
 function normalizePhotos(photos = []) {
   if (!Array.isArray(photos)) return [];
 
@@ -263,11 +379,21 @@ function normalizePhotos(photos = []) {
     .filter(Boolean);
 }
 
-function normalizeSubmission({ id, data }) {
+async function normalizeSubmission({ id, data }) {
   const openingHours = normalizeOpeningHours(
     data.openingHours,
     data.schedule
   );
+
+const subtagLabels = await normalizeSubtagDisplayLabels(
+  data.subtagLabels,
+  data.subtags
+);
+
+const approachLabels = await normalizeApproachDisplayLabels(
+  data.approachLabels,
+  data.approaches
+);
 
   return {
     id,
@@ -281,14 +407,21 @@ function normalizeSubmission({ id, data }) {
     tagId: data.tagId || null,
     tagLabel: data.tagLabel || data.tag || null,
 
-    subtags: Array.isArray(data.subtags) ? data.subtags : [],
-    approaches: Array.isArray(data.approaches)
-      ? data.approaches
-      : Array.isArray(data.approach)
-        ? data.approach
-        : Array.isArray(data.focuses)
-          ? data.focuses
-          : [],
+    subtagIds: Array.isArray(data.subtags)
+  ? data.subtags
+  : [],
+
+subtags: subtagLabels,
+
+approachIds: Array.isArray(data.approaches)
+  ? data.approaches
+  : Array.isArray(data.approach)
+    ? data.approach
+    : Array.isArray(data.focuses)
+      ? data.focuses
+      : [],
+
+approaches: approachLabels,
 
     price: data.price || data.priceLabel || "",
 
@@ -390,11 +523,21 @@ function normalizeReturnFields(returnData = {}) {
   };
 }
 
-function normalizeSnapshot(snapshot = {}) {
+async function normalizeSnapshot(snapshot = {}) {
   const openingHours = normalizeOpeningHours(
     snapshot.openingHours,
     snapshot.schedule
   );
+
+const subtagLabels = await normalizeSubtagDisplayLabels(
+  snapshot.subtagLabels,
+  snapshot.subtags
+);
+
+const approachLabels = await normalizeApproachDisplayLabels(
+  snapshot.approachLabels,
+  snapshot.approaches
+);
 
   return {
     name: snapshot.name || "",
@@ -403,14 +546,21 @@ function normalizeSnapshot(snapshot = {}) {
     tagId: snapshot.tagId || null,
     tagLabel: snapshot.tagLabel || snapshot.tag || null,
 
-    subtags: Array.isArray(snapshot.subtags) ? snapshot.subtags : [],
-    approaches: Array.isArray(snapshot.approaches)
-      ? snapshot.approaches
-      : Array.isArray(snapshot.approach)
-        ? snapshot.approach
-        : Array.isArray(snapshot.focuses)
-          ? snapshot.focuses
-          : [],
+   subtagIds: Array.isArray(snapshot.subtags)
+  ? snapshot.subtags
+  : [],
+
+subtags: subtagLabels,
+
+approachIds: Array.isArray(snapshot.approaches)
+  ? snapshot.approaches
+  : Array.isArray(snapshot.approach)
+    ? snapshot.approach
+    : Array.isArray(snapshot.focuses)
+      ? snapshot.focuses
+      : [],
+
+approaches: approachLabels,
 
     price: snapshot.price || snapshot.priceLabel || "",
 
@@ -423,8 +573,10 @@ function normalizeSnapshot(snapshot = {}) {
   };
 }
 
-function normalizeReturn({ id, data }) {
-  const snapshotBeforeReturn = normalizeSnapshot(data.snapshotBeforeReturn || {});
+async function normalizeReturn({ id, data }) {
+  const snapshotBeforeReturn = await normalizeSnapshot(
+    data.snapshotBeforeReturn || {}
+  );
 
   return {
     id,
@@ -467,7 +619,7 @@ async function getLatestActiveReturnBySubmissionId(submissionId) {
 
   const latestReturn = docs[0];
 
-  return normalizeReturn({
+  return await normalizeReturn({
     id: latestReturn.id,
     data: latestReturn.data,
   });
@@ -504,7 +656,7 @@ export default async function getReturnedPlaceSubmissionEditDataService({
     throw error;
   }
 
-  const submission = normalizeSubmission({
+  const submission = await normalizeSubmission({
     id: submissionDoc.id,
     data: submissionData,
   });

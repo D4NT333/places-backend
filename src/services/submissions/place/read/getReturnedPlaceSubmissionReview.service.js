@@ -1,5 +1,8 @@
 import { db } from "../../../../config/firebase.js";
 
+const SUBTAGS_COLLECTION = "subtag";
+const APPROACHES_COLLECTION = "approach";
+
 function formatTimestamp(timestamp) {
   if (!timestamp) return null;
 
@@ -210,7 +213,127 @@ function normalizeReturnFields(fields = {}) {
   };
 }
 
-function normalizeSnapshot(snapshot = {}) {
+function cleanText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+async function getSubtagLabelById(subtagId) {
+  const cleanSubtagId = cleanText(subtagId);
+
+  if (!cleanSubtagId) return "";
+
+  if (!cleanSubtagId.startsWith("subtag_")) {
+    return cleanSubtagId;
+  }
+
+  try {
+    const doc = await db
+      .collection(SUBTAGS_COLLECTION)
+      .doc(cleanSubtagId)
+      .get();
+
+    if (!doc.exists) {
+      return cleanSubtagId;
+    }
+
+    const data = doc.data();
+
+    return (
+      cleanText(data.label) ||
+      cleanText(data.name) ||
+      cleanText(data.title) ||
+      cleanSubtagId
+    );
+  } catch (error) {
+    console.error("Error obteniendo label de subtag:", error);
+    return cleanSubtagId;
+  }
+}
+
+async function getApproachLabelById(approachId) {
+  const cleanApproachId = cleanText(approachId);
+
+  if (!cleanApproachId) return "";
+
+  if (!cleanApproachId.startsWith("approach_")) {
+    return cleanApproachId;
+  }
+
+  try {
+    const doc = await db
+      .collection(APPROACHES_COLLECTION)
+      .doc(cleanApproachId)
+      .get();
+
+    if (!doc.exists) {
+      return cleanApproachId;
+    }
+
+    const data = doc.data();
+
+    return (
+      cleanText(data.label) ||
+      cleanText(data.name) ||
+      cleanText(data.title) ||
+      cleanApproachId
+    );
+  } catch (error) {
+    console.error("Error obteniendo label de approach:", error);
+    return cleanApproachId;
+  }
+}
+
+async function normalizeSubtagDisplayLabels(labels, ids) {
+  if (Array.isArray(labels) && labels.length > 0) {
+    return labels
+      .map(cleanText)
+      .filter(Boolean);
+  }
+
+  const cleanIds = Array.isArray(ids)
+    ? ids.map(cleanText).filter(Boolean)
+    : [];
+
+  const resolvedLabels = await Promise.all(
+    cleanIds.map(getSubtagLabelById)
+  );
+
+  return resolvedLabels
+    .map(cleanText)
+    .filter(Boolean);
+}
+
+async function normalizeApproachDisplayLabels(labels, ids) {
+  if (Array.isArray(labels) && labels.length > 0) {
+    return labels
+      .map(cleanText)
+      .filter(Boolean);
+  }
+
+  const cleanIds = Array.isArray(ids)
+    ? ids.map(cleanText).filter(Boolean)
+    : [];
+
+  const resolvedLabels = await Promise.all(
+    cleanIds.map(getApproachLabelById)
+  );
+
+  return resolvedLabels
+    .map(cleanText)
+    .filter(Boolean);
+}
+
+async function normalizeSnapshot(snapshot = {}) {
+  const subtagLabels = await normalizeSubtagDisplayLabels(
+    snapshot.subtagLabels,
+    snapshot.subtags
+  );
+
+  const approachLabels = await normalizeApproachDisplayLabels(
+    snapshot.approachLabels,
+    snapshot.approaches
+  );
+
   return {
     name: snapshot.name || "",
     description: snapshot.description || "",
@@ -218,8 +341,17 @@ function normalizeSnapshot(snapshot = {}) {
     tagId: snapshot.tagId || null,
     tagLabel: snapshot.tagLabel || snapshot.tag || null,
 
-    subtags: Array.isArray(snapshot.subtags) ? snapshot.subtags : [],
-    approaches: Array.isArray(snapshot.approaches) ? snapshot.approaches : [],
+    subtagIds: Array.isArray(snapshot.subtags)
+      ? snapshot.subtags
+      : [],
+
+    subtags: subtagLabels,
+
+    approachIds: Array.isArray(snapshot.approaches)
+      ? snapshot.approaches
+      : [],
+
+    approaches: approachLabels,
 
     price: snapshot.price || snapshot.priceLabel || null,
     schedule: snapshot.schedule || null,
@@ -274,6 +406,8 @@ export default async function getReturnedPlaceSubmissionReviewService(
     resolvedAt: formatTimestamp(data.resolvedAt),
     resolvedBy: data.resolvedBy || null,
 
-    snapshotBeforeReturn: normalizeSnapshot(data.snapshotBeforeReturn || {}),
+    snapshotBeforeReturn: await normalizeSnapshot(
+  data.snapshotBeforeReturn || {}
+),
   };
 }

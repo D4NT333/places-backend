@@ -211,29 +211,56 @@ function buildSubmissionUpdateData({ correctedFields, submissionData }) {
     updateData.tagLabel = tagLabel;
   }
 
-  if (hasOwn(correctedFields, "subtags")) {
-    const subtags = cleanStringArray(correctedFields.subtags);
+ if (hasOwn(correctedFields, "subtags")) {
+  const subtags = cleanStringArray(correctedFields.subtags);
+  const subtagLabels = cleanStringArray(correctedFields.subtagLabels);
 
-    if (subtags.length === 0) {
-      throw createHttpError("Debes enviar al menos una subetiqueta.", 400);
-    }
-
-    updateData.subtags = subtags;
+  if (subtags.length === 0) {
+    throw createHttpError("Debes enviar al menos una subetiqueta.", 400);
   }
 
-  if (hasOwn(correctedFields, "approaches")) {
-    if (correctedFields.approaches === null) {
-      updateData.approaches = null;
-    } else {
-      const approaches = cleanStringArray(correctedFields.approaches);
+  const invalidSubtag = subtags.find(
+    (subtagId) => !subtagId.startsWith("subtag_")
+  );
 
-      if (approaches.length === 0) {
-        throw createHttpError("Enfoque inválido.", 400);
-      }
-
-      updateData.approaches = approaches;
-    }
+  if (invalidSubtag) {
+    throw createHttpError(
+      "Las subetiquetas deben enviarse mediante sus IDs.",
+      400
+    );
   }
+
+  updateData.subtags = subtags;
+  updateData.subtagLabels = subtagLabels;
+}
+
+if (hasOwn(correctedFields, "approaches")) {
+  if (correctedFields.approaches === null) {
+    updateData.approaches = [];
+    updateData.approachLabels = [];
+  } else {
+    const approaches = cleanStringArray(correctedFields.approaches);
+    const approachLabels = cleanStringArray(correctedFields.approachLabels);
+
+    if (approaches.length === 0) {
+      throw createHttpError("Enfoque inválido.", 400);
+    }
+
+    const invalidApproach = approaches.find(
+      (approachId) => !approachId.startsWith("approach_")
+    );
+
+    if (invalidApproach) {
+      throw createHttpError(
+        "Los enfoques deben enviarse mediante sus IDs.",
+        400
+      );
+    }
+
+    updateData.approaches = approaches;
+    updateData.approachLabels = approachLabels;
+  }
+}
 
   if (hasOwn(correctedFields, "price")) {
     const price = cleanText(correctedFields.price);
