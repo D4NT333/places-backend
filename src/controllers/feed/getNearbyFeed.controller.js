@@ -1,22 +1,26 @@
 import { composeNearbyFeedService } from "../../services/feed/principal/composeFeed.service.js";
 
 export async function getNearbyFeedController(req, res) {
-  try {
-    console.log("BODY RECIBIDO:", req.body);
+  console.log("ENTRÓ A /api/feed/location");
+  console.log("BODY RECIBIDO:", req.body);
 
+  try {
     const { latitude, longitude } = req.body;
 
-    console.log("LAT:", latitude);
-    console.log("LONG:", longitude);
+    const lat = Number(latitude);
+    const lng = Number(longitude);
 
-    if (latitude == null || longitude == null) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       return res.status(400).json({
         ok: false,
-        message: "latitude y longitude son requeridos",
+        message: "latitude y longitude deben ser números válidos",
       });
     }
 
-    const result = await composeNearbyFeedService({ latitude, longitude });
+    const result = await composeNearbyFeedService({
+      latitude: lat,
+      longitude: lng,
+    });
 
     return res.status(200).json({
       ok: true,
