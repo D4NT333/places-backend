@@ -191,7 +191,7 @@ export default async function listPlaceSubmissionsService({
       )
       .orderBy(
         "createdAt",
-        "desc"
+        "asc"
       )
       .limit(
         finalLimit
@@ -208,7 +208,7 @@ export default async function listPlaceSubmissionsService({
       )
       .orderBy(
         "createdAt",
-        "desc"
+        "asc"
       )
       .limit(
         finalLimit

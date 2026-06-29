@@ -190,7 +190,7 @@ export default async function getPhotoSubmissionsService({
 
   query = query.orderBy(
     "createdAt",
-    "desc"
+    "asc"
   );
 
   if (

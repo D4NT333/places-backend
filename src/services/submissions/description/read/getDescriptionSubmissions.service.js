@@ -321,6 +321,7 @@ function normalizeSubmissionDoc(
 export default async function getDescriptionSubmissionsService({
   status = "all",
   limit = 50,
+  cursor = null,
   baseUrl,
 }) {
   const requestedStatus =
@@ -376,21 +377,59 @@ export default async function getDescriptionSubmissionsService({
     );
   }
 
-  query = query
-    .orderBy(
-      "createdAt",
-      "desc"
-    )
-    .limit(finalLimit);
+  query = query.orderBy(
+    "createdAt",
+    "asc"
+  );
+
+  if (cursor) {
+    const cursorDoc = await db
+      .collection(
+        DESCRIPTION_SUBMISSIONS_COLLECTION
+      )
+      .doc(cursor)
+      .get();
+
+    if (cursorDoc.exists) {
+      query = query.startAfter(
+        cursorDoc
+      );
+    }
+  }
 
   const snapshot =
-    await query.get();
+    await query
+      .limit(finalLimit + 1)
+      .get();
 
-  return snapshot.docs.map(
+  const hasMore =
+    snapshot.docs.length > finalLimit;
+
+  const pageDocs = hasMore
+    ? snapshot.docs.slice(
+        0,
+        finalLimit
+      )
+    : snapshot.docs;
+
+  const items = pageDocs.map(
     (doc) =>
       normalizeSubmissionDoc(
         doc,
         baseUrl
       )
   );
+
+  const lastDoc =
+    pageDocs[
+      pageDocs.length - 1
+    ];
+
+  return {
+    items,
+    nextCursor:
+      hasMore && lastDoc
+        ? lastDoc.id
+        : null,
+  };
 }
