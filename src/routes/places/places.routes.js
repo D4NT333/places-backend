@@ -8,6 +8,7 @@ import registerPlaceFromCandidateController from "../../controllers/places/regis
 import getPlacesFeedController from "../../controllers/places/getPlacesFeed.controller.js";
 import getPlaceDetailController from "../../controllers/places/getPlaceDetail.controller.js";
 import getGooglePlacePhotoController from "../../controllers/places/getGooglePlacePhoto.controller.js";
+import getPlaceRouteController from "../../controllers/routes/read/getPlaceRoute.controller.js";
 
 import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
 
@@ -34,5 +35,8 @@ router.get("/feed", getPlacesFeedController);
 router.get("/photos/google", getGooglePlacePhotoController);
 
 router.get("/:placeId/detail", verifyFirebaseToken, getPlaceDetailController);
+
+router.post("/:placeId/route",verifyFirebaseToken,getPlaceRouteController);
+
 
 export default router;  

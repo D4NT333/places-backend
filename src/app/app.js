@@ -10,6 +10,7 @@ import reviewsRoutes from "../routes/reviews/reviews.routes.js";
 import descriptionSubmissionRoutes from "../routes/submissions/descriptionSubmissions.routes.js";
 import photoSubmissionRoutes from "../routes/submissions/photoSubmissions.routes.js";
 import searchRoutes from "../routes/search/search.routes.js";
+import reportsRoutes from "../routes/reports/reports.routes.js";
 
 
 const app = express();
@@ -36,6 +37,8 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/users", usersRoutes);
 
 app.use("/api/reviews", reviewsRoutes);
+
+app.use("/api/reports", reportsRoutes);
 
 export default app;
 
