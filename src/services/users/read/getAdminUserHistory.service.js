@@ -73,11 +73,38 @@ function getStatusLabel(status) {
   return SUBMISSION_STATUS_LABELS[status] || "Pendiente";
 }
 
+function getRelatedLabel(type, placeName) {
+  const safePlaceName = placeName || "Sin lugar";
+
+  switch (type) {
+    case "place":
+      return safePlaceName;
+
+    case "description":
+      return `Descripción para ${safePlaceName}`;
+
+    case "photo":
+      return `Fotografías para ${safePlaceName}`;
+
+    default:
+      return safePlaceName;
+  }
+}
+
+
 function normalizeHistoryDoc(doc, type) {
   const data = doc.data();
 
   const status = normalizeSubmissionStatus(data.status);
-  const createdAt = data.createdAt || data.submittedAt || data.updatedAt;
+  const createdAt =
+    data.createdAt ||
+    data.submittedAt ||
+    data.updatedAt;
+
+  const placeName =
+    data.placeName ||
+    data.name ||
+    "Sin lugar";
 
   return {
     id: doc.id,
@@ -86,11 +113,17 @@ function normalizeHistoryDoc(doc, type) {
     type,
     typeLabel: HISTORY_TYPE_LABELS[type] || "Propuesta",
 
+    relatedLabel: getRelatedLabel(type, placeName),
+
     status,
     statusLabel: getStatusLabel(status),
 
-    placeId: data.placeId || data.placeDocId || null,
-    placeName: data.placeName || data.name || "Sin lugar",
+    placeId:
+      data.placeId ||
+      data.placeDocId ||
+      null,
+
+    placeName,
 
     createdAt: serializeDate(createdAt),
     createdAtMs: toDate(createdAt)?.getTime?.() || 0,

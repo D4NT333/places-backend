@@ -10,6 +10,7 @@ import getAdminUsersController from "../../controllers/users/read/getAdminUsers.
 import getAdminUserDetailController from "../../controllers/users/read/getAdminUserDetail.controller.js";
 import getAdminUserHistoryController from "../../controllers/users/read/getAdminUserHistory.controller.js";
 import getAdminUserReportsController from "../../controllers/users/read/getAdminUserReports.controller.js";
+import getAdminUserReportDetailController from "../../controllers/users/read/getAdminUserReportDetail.controller.js";
 
 const router = Router();
 
@@ -26,5 +27,7 @@ router.get("/admin/detail/:userId",verifyFirebaseToken,getAdminUserDetailControl
 router.get("/admin/detail/:userId/history",verifyFirebaseToken,getAdminUserHistoryController);
 
 router.get("/admin/detail/:userId/reports",verifyFirebaseToken,getAdminUserReportsController);
+
+router.get("/admin/:userId/reports/:reportId",verifyFirebaseToken,getAdminUserReportDetailController);
 
 export default router;
