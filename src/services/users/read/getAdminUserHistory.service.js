@@ -10,10 +10,17 @@ const SUBMISSION_STATUS_LABELS = {
   pending_delete: "Eliminación solicitada",
 };
 
+const REPORT_STATUS_LABELS = {
+  pending: "Pendiente",
+  resolved: "Resuelto",
+  discarded: "Descartado",
+};
+
 const HISTORY_TYPE_LABELS = {
   place: "Lugar",
   description: "Descripción",
   photo: "Fotografías",
+  report: "Reporte",
 };
 
 const COLLECTION_CONFIG = {
@@ -21,13 +28,20 @@ const COLLECTION_CONFIG = {
     collectionName: "placeSubmissions",
     userField: "createdBy",
   },
+
   description: {
     collectionName: "descriptionSubmissions",
     userField: "createdBy.uid",
   },
+
   photo: {
     collectionName: "photoSubmissions",
     userField: "createdBy",
+  },
+
+  report: {
+    collectionName: "reports",
+    userField: "reporter.uid",
   },
 };
 
@@ -66,11 +80,23 @@ function toDate(value) {
 }
 
 function normalizeSubmissionStatus(status) {
-  return SUBMISSION_STATUS_LABELS[status] ? status : "in_review";
+  return SUBMISSION_STATUS_LABELS[status]
+    ? status
+    : "in_review";
 }
 
-function getStatusLabel(status) {
+function normalizeReportStatus(status) {
+  return REPORT_STATUS_LABELS[status]
+    ? status
+    : "pending";
+}
+
+function getSubmissionStatusLabel(status) {
   return SUBMISSION_STATUS_LABELS[status] || "Pendiente";
+}
+
+function getReportStatusLabel(status) {
+  return REPORT_STATUS_LABELS[status] || "Pendiente";
 }
 
 function getRelatedLabel(type, placeName) {
@@ -91,11 +117,45 @@ function getRelatedLabel(type, placeName) {
   }
 }
 
+function getReportRelatedLabel(data) {
+  const reportTarget = data.reportTarget;
+
+  if (reportTarget === "user") {
+    const reportedUserName =
+      data.reportedUser?.name ||
+      "Usuario sin nombre";
+
+    return `Reporte sobre ${reportedUserName}`;
+  }
+
+  if (reportTarget === "place") {
+    const placeName =
+      data.place?.placeName ||
+      "Lugar sin nombre";
+
+    return `Reporte sobre ${placeName}`;
+  }
+
+  if (reportTarget === "general") {
+    return data.reasonLabel || "Reporte general";
+  }
+
+  if (data.place?.placeName) {
+    return `Reporte sobre ${data.place.placeName}`;
+  }
+
+  if (data.reportedUser?.name) {
+    return `Reporte sobre ${data.reportedUser.name}`;
+  }
+
+  return data.reasonLabel || "Reporte general";
+}
 
 function normalizeHistoryDoc(doc, type) {
   const data = doc.data();
 
   const status = normalizeSubmissionStatus(data.status);
+
   const createdAt =
     data.createdAt ||
     data.submittedAt ||
@@ -108,15 +168,24 @@ function normalizeHistoryDoc(doc, type) {
 
   return {
     id: doc.id,
-    submissionId: data.submissionId || doc.id,
+
+    submissionId:
+      data.submissionId ||
+      doc.id,
 
     type,
-    typeLabel: HISTORY_TYPE_LABELS[type] || "Propuesta",
 
-    relatedLabel: getRelatedLabel(type, placeName),
+    typeLabel:
+      HISTORY_TYPE_LABELS[type] ||
+      "Propuesta",
+
+    relatedLabel:
+      getRelatedLabel(type, placeName),
 
     status,
-    statusLabel: getStatusLabel(status),
+
+    statusLabel:
+      getSubmissionStatusLabel(status),
 
     placeId:
       data.placeId ||
@@ -125,24 +194,120 @@ function normalizeHistoryDoc(doc, type) {
 
     placeName,
 
-    createdAt: serializeDate(createdAt),
-    createdAtMs: toDate(createdAt)?.getTime?.() || 0,
+    createdAt:
+      serializeDate(createdAt),
 
-    updatedAt: serializeDate(data.updatedAt),
+    createdAtMs:
+      toDate(createdAt)?.getTime?.() || 0,
 
-    rawCollection: COLLECTION_CONFIG[type].collectionName,
+    updatedAt:
+      serializeDate(data.updatedAt),
+
+    rawCollection:
+      COLLECTION_CONFIG[type].collectionName,
+  };
+}
+
+function normalizeReportDoc(doc) {
+  const data = doc.data();
+
+  const status = normalizeReportStatus(data.status);
+
+  const createdAt =
+    data.createdAt ||
+    data.updatedAt;
+
+  return {
+    id: doc.id,
+
+    submissionId:
+      data.reportId ||
+      doc.id,
+
+    type: "report",
+
+    typeLabel:
+      HISTORY_TYPE_LABELS.report,
+
+    relatedLabel:
+      getReportRelatedLabel(data),
+
+    status,
+
+    statusLabel:
+      getReportStatusLabel(status),
+
+    reportId:
+      data.reportId ||
+      doc.id,
+
+    reportTarget:
+      data.reportTarget ||
+      null,
+
+    reasonId:
+      data.reasonId ||
+      null,
+
+    reasonLabel:
+      data.reasonLabel ||
+      "Sin motivo",
+
+    message:
+      data.message ||
+      "",
+
+    placeId:
+      data.place?.placeId ||
+      null,
+
+    placeName:
+      data.place?.placeName ||
+      null,
+
+    reportedUserId:
+      data.reportedUser?.uid ||
+      null,
+
+    reportedUserName:
+      data.reportedUser?.name ||
+      null,
+
+    reporterId:
+      data.reporter?.uid ||
+      null,
+
+    reporterName:
+      data.reporter?.name ||
+      null,
+
+    createdAt:
+      serializeDate(createdAt),
+
+    createdAtMs:
+      toDate(createdAt)?.getTime?.() || 0,
+
+    updatedAt:
+      serializeDate(data.updatedAt),
+
+    rawCollection:
+      COLLECTION_CONFIG.report.collectionName,
   };
 }
 
 function encodeCursor(value) {
-  return Buffer.from(JSON.stringify(value)).toString("base64");
+  return Buffer.from(
+    JSON.stringify(value)
+  ).toString("base64");
 }
 
 function decodeCursor(cursor) {
   if (!cursor) return null;
 
   try {
-    return JSON.parse(Buffer.from(cursor, "base64").toString("utf8"));
+    return JSON.parse(
+      Buffer.from(cursor, "base64").toString("utf8")
+    );
   } catch {
     return null;
   }
@@ -175,7 +340,13 @@ async function getCollectionItems({
 
   const snapshot = await query.get();
 
-  return snapshot.docs.map((doc) => normalizeHistoryDoc(doc, type));
+  return snapshot.docs.map((doc) => {
+    if (type === "report") {
+      return normalizeReportDoc(doc);
+    }
+
+    return normalizeHistoryDoc(doc, type);
+  });
 }
 
 export default async function getAdminUserHistoryService({
@@ -183,20 +354,34 @@ export default async function getAdminUserHistoryService({
   limit = 15,
   cursor = null,
 }) {
-  const safeLimit = Math.min(Number(limit) || 15, 30);
+  const safeLimit = Math.min(
+    Number(limit) || 15,
+    30
+  );
 
-  const decodedCursor = decodeCursor(cursor) || {};
+  const decodedCursor =
+    decodeCursor(cursor) || {};
 
-  const placeCursor = decodedCursor.place || null;
-  const descriptionCursor = decodedCursor.description || null;
-  const photoCursor = decodedCursor.photo || null;
+  const placeCursor =
+    decodedCursor.place || null;
 
-  const requestLimitPerCollection = safeLimit + 1;
+  const descriptionCursor =
+    decodedCursor.description || null;
+
+  const photoCursor =
+    decodedCursor.photo || null;
+
+  const reportCursor =
+    decodedCursor.report || null;
+
+  const requestLimitPerCollection =
+    safeLimit + 1;
 
   const [
     placeItems,
     descriptionItems,
     photoItems,
+    reportItems,
   ] = await Promise.all([
     getCollectionItems({
       type: "place",
@@ -204,16 +389,25 @@ export default async function getAdminUserHistoryService({
       cursorDocId: placeCursor,
       limit: requestLimitPerCollection,
     }),
+
     getCollectionItems({
       type: "description",
       userId,
       cursorDocId: descriptionCursor,
       limit: requestLimitPerCollection,
     }),
+
     getCollectionItems({
       type: "photo",
       userId,
       cursorDocId: photoCursor,
+      limit: requestLimitPerCollection,
+    }),
+
+    getCollectionItems({
+      type: "report",
+      userId,
+      cursorDocId: reportCursor,
       limit: requestLimitPerCollection,
     }),
   ]);
@@ -222,45 +416,84 @@ export default async function getAdminUserHistoryService({
     ...placeItems,
     ...descriptionItems,
     ...photoItems,
-  ].sort((a, b) => b.createdAtMs - a.createdAtMs);
+    ...reportItems,
+  ].sort(
+    (a, b) =>
+      b.createdAtMs - a.createdAtMs
+  );
 
-  const pageItems = mergedItems.slice(0, safeLimit);
+  const pageItems =
+    mergedItems.slice(0, safeLimit);
 
   const usedByType = {
-    place: pageItems.filter((item) => item.type === "place"),
-    description: pageItems.filter((item) => item.type === "description"),
-    photo: pageItems.filter((item) => item.type === "photo"),
+    place: pageItems.filter(
+      (item) => item.type === "place"
+    ),
+
+    description: pageItems.filter(
+      (item) => item.type === "description"
+    ),
+
+    photo: pageItems.filter(
+      (item) => item.type === "photo"
+    ),
+
+    report: pageItems.filter(
+      (item) => item.type === "report"
+    ),
   };
 
   const nextCursorPayload = {
     place:
       usedByType.place.length > 0
-        ? usedByType.place[usedByType.place.length - 1].id
+        ? usedByType.place[
+            usedByType.place.length - 1
+          ].id
         : placeCursor,
 
     description:
       usedByType.description.length > 0
-        ? usedByType.description[usedByType.description.length - 1].id
+        ? usedByType.description[
+            usedByType.description.length - 1
+          ].id
         : descriptionCursor,
 
     photo:
       usedByType.photo.length > 0
-        ? usedByType.photo[usedByType.photo.length - 1].id
+        ? usedByType.photo[
+            usedByType.photo.length - 1
+          ].id
         : photoCursor,
+
+    report:
+      usedByType.report.length > 0
+        ? usedByType.report[
+            usedByType.report.length - 1
+          ].id
+        : reportCursor,
   };
 
   const hasMore =
-    placeItems.length > usedByType.place.length ||
-    descriptionItems.length > usedByType.description.length ||
-    photoItems.length > usedByType.photo.length;
+    placeItems.length >
+      usedByType.place.length ||
+    descriptionItems.length >
+      usedByType.description.length ||
+    photoItems.length >
+      usedByType.photo.length ||
+    reportItems.length >
+      usedByType.report.length;
 
-  const cleanedItems = pageItems.map(({ createdAtMs, ...item }) => item);
+  const cleanedItems = pageItems.map(
+    ({ createdAtMs, ...item }) => item
+  );
 
   return {
     history: cleanedItems,
     count: cleanedItems.length,
     hasMore,
-    nextCursor: hasMore ? encodeCursor(nextCursorPayload) : null,
+    nextCursor: hasMore
+      ? encodeCursor(nextCursorPayload)
+      : null,
     limit: safeLimit,
   };
 }

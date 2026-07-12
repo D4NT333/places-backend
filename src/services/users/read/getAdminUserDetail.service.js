@@ -27,7 +27,7 @@ const WEEK_DAYS = [
   "Sáb",
 ];
 
-const SUBMISSION_COLLECTIONS = [
+const ACTIVITY_COLLECTIONS = [
   {
     type: "place",
     collectionName: "placeSubmissions",
@@ -42,6 +42,11 @@ const SUBMISSION_COLLECTIONS = [
     type: "photo",
     collectionName: "photoSubmissions",
     userField: "createdBy",
+  },
+  {
+    type: "report",
+    collectionName: "reports",
+    userField: "reporter.uid",
   },
 ];
 
@@ -79,23 +84,131 @@ function toDate(value) {
   return date;
 }
 
+function formatDateOnly(date) {
+  const year = date.getFullYear();
+
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, "0");
+
+  const day = String(
+    date.getDate()
+  ).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getMondayFromDate(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  date.setHours(0, 0, 0, 0);
+
+  const currentDay = date.getDay();
+
+  const daysSinceMonday =
+    currentDay === 0
+      ? 6
+      : currentDay - 1;
+
+  date.setDate(
+    date.getDate() - daysSinceMonday
+  );
+
+  return date;
+}
+
+function getCurrentWeekStart() {
+  return getMondayFromDate(new Date());
+}
+
+function normalizeSelectedWeekStart(value) {
+  if (!value) {
+    return getCurrentWeekStart();
+  }
+
+  const parsedDate = new Date(
+    `${value}T00:00:00`
+  );
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return getCurrentWeekStart();
+  }
+
+  return getMondayFromDate(parsedDate);
+}
+
+function getWeekRange(weekStartValue) {
+  const start =
+    normalizeSelectedWeekStart(weekStartValue);
+
+  const endExclusive = new Date(start);
+
+  endExclusive.setDate(
+    endExclusive.getDate() + 7
+  );
+
+  const endInclusive = new Date(start);
+
+  endInclusive.setDate(
+    endInclusive.getDate() + 6
+  );
+
+  endInclusive.setHours(
+    23,
+    59,
+    59,
+    999
+  );
+
+  return {
+    start,
+    endExclusive,
+    endInclusive,
+  };
+}
+
+function isDateInsideWeek(
+  date,
+  start,
+  endExclusive
+) {
+  if (!date) return false;
+
+  return (
+    date >= start &&
+    date < endExclusive
+  );
+}
+
 function getInitials(name = "", email = "") {
   const cleanName = name?.trim();
 
   if (cleanName) {
-    const words = cleanName.split(" ").filter(Boolean);
+    const words = cleanName
+      .split(" ")
+      .filter(Boolean);
 
     if (words.length === 1) {
-      return words[0].slice(0, 2).toUpperCase();
+      return words[0]
+        .slice(0, 2)
+        .toUpperCase();
     }
 
-    return `${words[0][0]}${words[1][0]}`.toUpperCase();
+    return `${words[0][0]}${words[1][0]}`
+      .toUpperCase();
   }
 
   const cleanEmail = email?.trim();
 
   if (cleanEmail) {
-    return cleanEmail.replace(/@.*/, "").slice(0, 2).toUpperCase();
+    return cleanEmail
+      .replace(/@.*/, "")
+      .slice(0, 2)
+      .toUpperCase();
   }
 
   return "US";
@@ -124,9 +237,16 @@ function getUserStatusLabel(status) {
 function normalizeUser(doc) {
   const data = doc.data();
 
-  const name = data.name || "Usuario sin nombre";
-  const email = data.email || "Sin correo";
-  const status = normalizeUserStatus(data.status);
+  const name =
+    data.name ||
+    "Usuario sin nombre";
+
+  const email =
+    data.email ||
+    "Sin correo";
+
+  const status =
+    normalizeUserStatus(data.status);
 
   return {
     id: doc.id,
@@ -136,47 +256,79 @@ function normalizeUser(doc) {
     email,
     initials: getInitials(name, email),
 
-    photoURL: data.photoURL || null,
+    photoURL:
+      data.photoURL ||
+      null,
 
-    provider: data.provider || null,
+    provider:
+      data.provider ||
+      null,
+
     providerLabel:
       data.provider === "google.com"
         ? "Google"
-        : data.provider || "Sin proveedor",
+        : data.provider ||
+          "Sin proveedor",
 
-    profile: data.profile || data.profileLabel || "Sin perfil",
+    profile:
+      data.profile ||
+      data.profileLabel ||
+      "Sin perfil",
 
     status,
-    statusLabel: getUserStatusLabel(status),
+    statusLabel:
+      getUserStatusLabel(status),
 
-    birthday: data.birthday || data.birthDate || null,
-    emailVerified: Boolean(data.emailVerified),
+    birthday:
+      data.birthday ||
+      data.birthDate ||
+      null,
 
-    createdAt: serializeDate(data.createdAt),
-    updatedAt: serializeDate(data.updatedAt),
-    lastLoginAt: serializeDate(data.lastLoginAt),
+    emailVerified:
+      Boolean(data.emailVerified),
+
+    createdAt:
+      serializeDate(data.createdAt),
+
+    updatedAt:
+      serializeDate(data.updatedAt),
+
+    lastLoginAt:
+      serializeDate(data.lastLoginAt),
   };
 }
 
-function normalizeSubmissionForStats(doc, type) {
+function normalizeActivityItem(doc, type) {
   const data = doc.data();
 
-  const createdAt = data.createdAt || data.submittedAt || data.updatedAt;
+  const createdAt =
+    data.createdAt ||
+    data.submittedAt ||
+    data.updatedAt;
 
   return {
     id: doc.id,
+
     type,
-    status: normalizeSubmissionStatus(data.status),
-    createdAtDate: toDate(createdAt),
+
+    status:
+      type === "report"
+        ? data.status || "pending"
+        : normalizeSubmissionStatus(
+            data.status
+          ),
+
+    createdAtDate:
+      toDate(createdAt),
   };
 }
 
-async function getSubmissionsForStats({
+async function getActivityItems({
   collectionName,
   userField,
   userId,
   type,
-  limit = 200,
+  limit = 500,
 }) {
   const snapshot = await db
     .collection(collectionName)
@@ -186,140 +338,389 @@ async function getSubmissionsForStats({
     .get();
 
   return snapshot.docs.map((doc) =>
-    normalizeSubmissionForStats(doc, type)
+    normalizeActivityItem(doc, type)
   );
 }
 
-function buildWeeklyActivity(submissions) {
-  const countsByDay = {
-    Dom: 0,
-    Lun: 0,
-    Mar: 0,
-    Mié: 0,
-    Jue: 0,
-    Vie: 0,
-    Sáb: 0,
+function buildWeeklyActivity(items) {
+  const days = {
+    Lun: {
+      label: "Lun",
+      value: 0,
+      places: 0,
+      descriptions: 0,
+      photos: 0,
+      reports: 0,
+    },
+    Mar: {
+      label: "Mar",
+      value: 0,
+      places: 0,
+      descriptions: 0,
+      photos: 0,
+      reports: 0,
+    },
+    Mié: {
+      label: "Mié",
+      value: 0,
+      places: 0,
+      descriptions: 0,
+      photos: 0,
+      reports: 0,
+    },
+    Jue: {
+      label: "Jue",
+      value: 0,
+      places: 0,
+      descriptions: 0,
+      photos: 0,
+      reports: 0,
+    },
+    Vie: {
+      label: "Vie",
+      value: 0,
+      places: 0,
+      descriptions: 0,
+      photos: 0,
+      reports: 0,
+    },
+    Sáb: {
+      label: "Sáb",
+      value: 0,
+      places: 0,
+      descriptions: 0,
+      photos: 0,
+      reports: 0,
+    },
+    Dom: {
+      label: "Dom",
+      value: 0,
+      places: 0,
+      descriptions: 0,
+      photos: 0,
+      reports: 0,
+    },
   };
 
-  submissions.forEach((submission) => {
-    if (!submission.createdAtDate) return;
+  items.forEach((item) => {
+    if (!item.createdAtDate) {
+      return;
+    }
 
-    const dayLabel = WEEK_DAYS[submission.createdAtDate.getDay()];
+    const dayLabel =
+      WEEK_DAYS[
+        item.createdAtDate.getDay()
+      ];
 
-    countsByDay[dayLabel] += 1;
+    const day = days[dayLabel];
+
+    day.value += 1;
+
+    switch (item.type) {
+      case "place":
+        day.places += 1;
+        break;
+
+      case "description":
+        day.descriptions += 1;
+        break;
+
+      case "photo":
+        day.photos += 1;
+        break;
+
+      case "report":
+        day.reports += 1;
+        break;
+
+      default:
+        break;
+    }
   });
 
   return [
-    {
-      label: "Lun",
-      value: countsByDay.Lun,
-    },
-    {
-      label: "Mar",
-      value: countsByDay.Mar,
-    },
-    {
-      label: "Mié",
-      value: countsByDay.Mié,
-    },
-    {
-      label: "Jue",
-      value: countsByDay.Jue,
-    },
-    {
-      label: "Vie",
-      value: countsByDay.Vie,
-    },
-    {
-      label: "Sáb",
-      value: countsByDay.Sáb,
-    },
-    {
-      label: "Dom",
-      value: countsByDay.Dom,
-    },
+    days.Lun,
+    days.Mar,
+    days.Mié,
+    days.Jue,
+    days.Vie,
+    days.Sáb,
+    days.Dom,
   ];
 }
 
-function countByStatus(submissions, statuses) {
-  return submissions.filter((submission) =>
-    statuses.includes(submission.status)
+function countByStatus(items, statuses) {
+  return items.filter((item) =>
+    statuses.includes(item.status)
   ).length;
 }
 
-export default async function getAdminUserDetailService({ userId }) {
-  const userDoc = await db.collection("user").doc(userId).get();
+function buildAvailableWeeks(
+  items,
+  maximumWeeks = 12
+) {
+  const weekMap = new Map();
+
+  const currentWeekStart =
+    getCurrentWeekStart();
+
+  weekMap.set(
+    formatDateOnly(currentWeekStart),
+    currentWeekStart
+  );
+
+  items.forEach((item) => {
+    if (!item.createdAtDate) {
+      return;
+    }
+
+    const weekStart =
+      getMondayFromDate(
+        item.createdAtDate
+      );
+
+    if (!weekStart) {
+      return;
+    }
+
+    const key =
+      formatDateOnly(weekStart);
+
+    if (!weekMap.has(key)) {
+      weekMap.set(key, weekStart);
+    }
+  });
+
+  return Array.from(
+    weekMap.values()
+  )
+    .sort(
+      (a, b) =>
+        b.getTime() - a.getTime()
+    )
+    .slice(0, maximumWeeks)
+    .map((start) => {
+      const end = new Date(start);
+
+      end.setDate(
+        end.getDate() + 6
+      );
+
+      return {
+        start: formatDateOnly(start),
+        end: formatDateOnly(end),
+      };
+    });
+}
+
+export default async function getAdminUserDetailService({
+  userId,
+  weekStart = null,
+}) {
+  const userDoc = await db
+    .collection("user")
+    .doc(userId)
+    .get();
 
   if (!userDoc.exists) {
-    const error = new Error("El usuario no existe.");
+    const error = new Error(
+      "El usuario no existe."
+    );
+
     error.statusCode = 404;
+
     throw error;
   }
 
   const user = normalizeUser(userDoc);
 
   const [
-    placeSubmissions,
-    descriptionSubmissions,
-    photoSubmissions,
+    placeItems,
+    descriptionItems,
+    photoItems,
+    reportItems,
   ] = await Promise.all(
-    SUBMISSION_COLLECTIONS.map((config) =>
-      getSubmissionsForStats({
-        collectionName: config.collectionName,
-        userField: config.userField,
-        userId,
-        type: config.type,
-        limit: 200,
-      })
+    ACTIVITY_COLLECTIONS.map(
+      (config) =>
+        getActivityItems({
+          collectionName:
+            config.collectionName,
+
+          userField:
+            config.userField,
+
+          userId,
+
+          type:
+            config.type,
+
+          limit: 500,
+        })
     )
   );
 
-  const allSubmissions = [
-    ...placeSubmissions,
-    ...descriptionSubmissions,
-    ...photoSubmissions,
+  const allActivityItems = [
+    ...placeItems,
+    ...descriptionItems,
+    ...photoItems,
+    ...reportItems,
   ];
 
-  const totalContributions = allSubmissions.length;
+  const {
+    start,
+    endExclusive,
+    endInclusive,
+  } = getWeekRange(weekStart);
 
-  const approvedCount = countByStatus(allSubmissions, [
-    "approved",
-  ]);
+  const selectedWeekItems =
+    allActivityItems.filter((item) =>
+      isDateInsideWeek(
+        item.createdAtDate,
+        start,
+        endExclusive
+      )
+    );
 
-  const rejectedCount = countByStatus(allSubmissions, [
-    "rejected",
-  ]);
+  const selectedPlaces =
+    selectedWeekItems.filter(
+      (item) =>
+        item.type === "place"
+    );
 
-  const pendingCount = countByStatus(allSubmissions, [
-    "in_review",
-    "pending",
-    "returned",
-    "resubmitted",
-  ]);
+  const selectedDescriptions =
+    selectedWeekItems.filter(
+      (item) =>
+        item.type === "description"
+    );
 
-  const weeklyActivity = buildWeeklyActivity(allSubmissions);
+  const selectedPhotos =
+    selectedWeekItems.filter(
+      (item) =>
+        item.type === "photo"
+    );
+
+  const selectedReports =
+    selectedWeekItems.filter(
+      (item) =>
+        item.type === "report"
+    );
+
+  /*
+    Los reportes no usan los estados
+    approved, rejected, returned, etc.
+
+    Por eso estos tres conteos se calculan
+    solamente con propuestas.
+  */
+  const selectedSubmissions =
+    selectedWeekItems.filter(
+      (item) =>
+        item.type !== "report"
+    );
+
+  const approvedCount =
+    countByStatus(
+      selectedSubmissions,
+      ["approved"]
+    );
+
+  const rejectedCount =
+    countByStatus(
+      selectedSubmissions,
+      ["rejected"]
+    );
+
+  const pendingCount =
+    countByStatus(
+      selectedSubmissions,
+      [
+        "in_review",
+        "pending",
+        "returned",
+        "resubmitted",
+      ]
+    );
+
+  const weeklyActivity =
+    buildWeeklyActivity(
+      selectedWeekItems
+    );
+
+  const availableWeeks =
+    buildAvailableWeeks(
+      allActivityItems,
+      12
+    );
 
   return {
     user,
 
     moderation: {
       reportsCount: 0,
-      emptyMessage: "Este usuario no tiene reportes recibidos.",
+
+      emptyMessage:
+        "Este usuario no tiene reportes recibidos.",
     },
 
     activity: {
-      totalContributions,
+      /*
+        Estos valores corresponden
+        a la semana seleccionada.
+      */
+      totalContributions:
+        selectedWeekItems.length,
 
-      placesCount: placeSubmissions.length,
-      descriptionsCount: descriptionSubmissions.length,
-      photosCount: photoSubmissions.length,
-      reportsSentCount: 0,
+      placesCount:
+        selectedPlaces.length,
+
+      descriptionsCount:
+        selectedDescriptions.length,
+
+      photosCount:
+        selectedPhotos.length,
+
+      reportsSentCount:
+        selectedReports.length,
 
       approvedCount,
       rejectedCount,
       pendingCount,
 
       weeklyActivity,
+
+      selectedWeek: {
+        start:
+          formatDateOnly(start),
+
+        end:
+          formatDateOnly(
+            endInclusive
+          ),
+      },
+
+      availableWeeks,
+
+      /*
+        Los dejamos disponibles por si
+        después quieres mostrar también
+        los totales históricos.
+      */
+      historicalTotals: {
+        totalContributions:
+          allActivityItems.length,
+
+        placesCount:
+          placeItems.length,
+
+        descriptionsCount:
+          descriptionItems.length,
+
+        photosCount:
+          photoItems.length,
+
+        reportsSentCount:
+          reportItems.length,
+      },
     },
   };
 }

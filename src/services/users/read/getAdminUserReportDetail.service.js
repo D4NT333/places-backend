@@ -66,19 +66,38 @@ function normalizeReporter(reporter) {
   };
 }
 
-function normalizeReportedUser(reportedUser) {
-  if (!reportedUser) {
+function normalizeReportedUser(reportedUser, userData = null) {
+  if (!reportedUser && !userData) {
     return {
       uid: null,
       name: "Usuario desconocido",
+      email: null,
       photoURL: null,
     };
   }
 
   return {
-    uid: reportedUser.uid || null,
-    name: reportedUser.name || "Usuario desconocido",
-    photoURL: reportedUser.photoURL || null,
+    uid:
+      reportedUser?.uid ||
+      userData?.uid ||
+      null,
+
+    name:
+      userData?.name ||
+      userData?.displayName ||
+      reportedUser?.name ||
+      "Usuario desconocido",
+
+    email:
+      userData?.email ||
+      reportedUser?.email ||
+      null,
+
+    photoURL:
+      userData?.photoURL ||
+      userData?.picture ||
+      reportedUser?.photoURL ||
+      null,
   };
 }
 
@@ -173,6 +192,19 @@ export default async function getAdminUserReportDetailService({
     );
   }
 
+  let reportedUserData = null;
+
+if (reportedUserId) {
+  const userSnapshot = await db
+    .collection("user")
+    .doc(reportedUserId)
+    .get();
+
+  if (userSnapshot.exists) {
+    reportedUserData = userSnapshot.data();
+  }
+}
+
   const status = normalizeStatus(data.status);
   const priority = data.priority || "normal";
 
@@ -219,9 +251,10 @@ export default async function getAdminUserReportDetailService({
         normalizeReporter(data.reporter),
 
       reportedUser:
-        normalizeReportedUser(
-          data.reportedUser
-        ),
+  normalizeReportedUser(
+    data.reportedUser,
+    reportedUserData
+  ),
 
       place:
         normalizePlace(data.place),

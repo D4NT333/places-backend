@@ -97,6 +97,19 @@ export default async function createReportService({ user, payload }) {
   const reportedUserId = cleanString(payload.reportedUserId);
   const reportedUserName = cleanString(payload.reportedUserName);
 
+  let reportedUserData = null;
+
+if (reportTarget === "user" && reportedUserId) {
+  const reportedUserSnapshot = await db
+    .collection("user")
+    .doc(reportedUserId)
+    .get();
+
+  if (reportedUserSnapshot.exists) {
+    reportedUserData = reportedUserSnapshot.data();
+  }
+}
+
   const reviewId = cleanString(payload.reviewId);
 
   const reportData = {
@@ -129,9 +142,23 @@ export default async function createReportService({ user, payload }) {
     },
 
     reportedUser: {
-      uid: reportedUserId || null,
-      name: reportedUserName || null,
-    },
+  uid: reportedUserId || null,
+
+  name:
+    reportedUserData?.name ||
+    reportedUserData?.displayName ||
+    reportedUserName ||
+    null,
+
+  email:
+    reportedUserData?.email ||
+    null,
+
+  photoURL:
+    reportedUserData?.photoURL ||
+    reportedUserData?.picture ||
+    null,
+},
 
     review: {
       reviewId: reviewId || null,

@@ -3,6 +3,7 @@ import getAdminUserDetailService from "../../../services/users/read/getAdminUser
 export default async function getAdminUserDetailController(req, res) {
   try {
     const { userId } = req.params;
+    const weekStart = req.query.weekStart || null;
 
     if (!userId) {
       return res.status(400).json({
@@ -13,6 +14,7 @@ export default async function getAdminUserDetailController(req, res) {
 
     const result = await getAdminUserDetailService({
       userId,
+      weekStart,
     });
 
     return res.status(200).json({
