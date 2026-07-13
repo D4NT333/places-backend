@@ -241,6 +241,7 @@ if (normalizedApproaches.length === 0) {
       trend: buildTrend(),
 
       status: "published",
+      activityStatus: "active",
       source: "mobile",
 
       createdBy: submission.createdBy || null,

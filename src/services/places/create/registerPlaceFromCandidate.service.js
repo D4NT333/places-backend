@@ -158,8 +158,6 @@ export default async function registerPlaceFromCandidateService({
     candidateId,
     googlePlaceId,
 
-    status = "published",
-
     name,
     description,
     address,
@@ -273,8 +271,9 @@ export default async function registerPlaceFromCandidateService({
       approvedAt: now,
     },
 
-    status,
-    createdBy: adminUid,
+      status: "published",
+    activityStatus: "active",
+    createdBy: adminUid, 
 
     name: name.trim(),
     description: description.trim(),

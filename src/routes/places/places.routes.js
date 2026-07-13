@@ -9,6 +9,7 @@ import getPlacesFeedController from "../../controllers/places/getPlacesFeed.cont
 import getPlaceDetailController from "../../controllers/places/getPlaceDetail.controller.js";
 import getGooglePlacePhotoController from "../../controllers/places/getGooglePlacePhoto.controller.js";
 import getPlaceRouteController from "../../controllers/routes/read/getPlaceRoute.controller.js";
+import getAdminPlacesController from "../../controllers/places/getAdminPlaces.controller.js";
 
 import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
 
@@ -28,7 +29,7 @@ router.get("/admin/google-places/candidates-summary",getGoogleCandidatesSummaryC
 
 router.get("/admin/google-places/candidates/:googlePlaceId/details",getGooglePlaceCandidateDetailsController);
 
-router.post("/admin/google-places/register-from-candidate",registerPlaceFromCandidateController);
+router.post("/admin/google-places/register-from-candidate",verifyFirebaseToken,registerPlaceFromCandidateController);
 
 router.get("/feed", getPlacesFeedController);
 
@@ -38,5 +39,8 @@ router.get("/:placeId/detail", verifyFirebaseToken, getPlaceDetailController);
 
 router.post("/:placeId/route",verifyFirebaseToken,getPlaceRouteController);
 
+router.get("/admin/list",verifyFirebaseToken,getAdminPlacesController);
+
 
 export default router;  
+
