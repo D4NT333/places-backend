@@ -14,6 +14,7 @@ import getAdminPlaceDetailController from "../../controllers/places/getAdminPlac
 import getAdminPlaceReviewsController from "../../controllers/places/getAdminPlaceReviews.controller.js";
 import getAdminPlaceReportsController from "../../controllers/places/getAdminPlaceReports.controller.js";
 import getAdminPlaceSubmissionsController from "../../controllers/places/getAdminPlaceSubmissions.controller.js";
+import getAdminPlaceReviewDetailController from "../../controllers/places/getAdminPlaceReviewDetail.controller.js";
 
 import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
 
@@ -49,6 +50,8 @@ router.get("/admin/list",verifyFirebaseToken,getAdminPlacesController);
 router.get("/admin/:placeId",verifyFirebaseToken,getAdminPlaceDetailController);
 
 router.get("/admin/:placeId/reviews",verifyFirebaseToken,getAdminPlaceReviewsController);
+
+router.get("/admin/:placeId/reviews/:reviewId",verifyFirebaseToken,getAdminPlaceReviewDetailController,);
 
 router.get("/admin/:placeId/reports",verifyFirebaseToken,getAdminPlaceReportsController);
 

@@ -160,6 +160,45 @@ async function resolveAdmin(adminId) {
   };
 }
 
+async function resolveUser(userId) {
+  if (!userId) {
+    return null;
+  }
+
+  const user = await getDocumentById(
+    "user",
+    userId,
+  );
+
+  if (!user) {
+    return {
+      uid: userId,
+      name: userId,
+      email: null,
+      photoURL: null,
+    };
+  }
+
+  return {
+    uid: user.uid || userId,
+
+    name:
+      user.name ||
+      user.displayName ||
+      user.username ||
+      user.email ||
+      userId,
+
+    email: user.email || null,
+
+    photoURL:
+      user.photoURL ||
+      user.photo ||
+      user.picture ||
+      null,
+  };
+}
+
 export default async function getAdminPlaceDetailService(
   placeId,
 ) {
@@ -184,29 +223,43 @@ export default async function getAdminPlaceDetailService(
 
   const place = placeSnapshot.data();
 
-  const [
-    category,
-    subtags,
-    approaches,
-    createdBy,
-    approvedBy,
-  ] = await Promise.all([
-    resolveTaxonomyItem("tag", place.tagId),
+  const origin = place.origin || {};
 
-    resolveTaxonomyList(
-      "subtag",
-      place.subtags || [],
-    ),
+ const [
+  category,
+  subtags,
+  approaches,
+  createdBy,
+  approvedBy,
+  submittedBy,
+] = await Promise.all([
+  resolveTaxonomyItem(
+    "tag",
+    place.tagId,
+  ),
 
-    resolveTaxonomyList(
-      "approaches",
-      place.approaches || [],
-    ),
+  resolveTaxonomyList(
+    "subtag",
+    place.subtags || [],
+  ),
 
-    resolveAdmin(place.createdBy),
+  resolveTaxonomyList(
+    "approach",
+    place.approaches || [],
+  ),
 
-    resolveAdmin(place.origin?.approvedBy),
-  ]);
+  resolveAdmin(
+    place.createdBy,
+  ),
+
+  resolveAdmin(
+    origin.approvedBy,
+  ),
+
+  resolveUser(
+    origin.submittedBy,
+  ),
+]);
 
   const photos = Array.isArray(place.photos)
     ? place.photos
@@ -224,7 +277,6 @@ export default async function getAdminPlaceDetailService(
   const metrics = place.metrics || {};
   const trend = place.trend || {};
   const googleData = place.googleData || {};
-  const origin = place.origin || {};
   const openingHours = place.openingHours || {};
 
   const priceRange =
@@ -384,33 +436,31 @@ export default async function getAdminPlaceDetailService(
         ),
       },
 
-      validation: {
-        source:
-          origin.type ||
-          place.source ||
-          "unknown",
+     validation: {
+  source:
+    origin.type ||
+    place.source ||
+    "unknown",
 
-        createdBy,
-        approvedBy,
+  createdBy,
+  approvedBy,
+  submittedBy,
 
-        submittedBy:
-          origin.submittedBy || null,
+  submissionId:
+    origin.submissionId || null,
 
-        submissionId:
-          origin.submissionId || null,
+  createdAt: serializeDate(
+    place.createdAt,
+  ),
 
-        createdAt: serializeDate(
-          place.createdAt,
-        ),
+  approvedAt: serializeDate(
+    origin.approvedAt,
+  ),
 
-        approvedAt: serializeDate(
-          origin.approvedAt,
-        ),
-
-        updatedAt: serializeDate(
-          place.updatedAt,
-        ),
-      },
+  updatedAt: serializeDate(
+    place.updatedAt,
+  ),
+},
 
       lastInteractionAt: serializeDate(
         place.lastInteractionAt,
