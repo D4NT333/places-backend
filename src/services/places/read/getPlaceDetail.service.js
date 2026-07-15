@@ -302,6 +302,38 @@ function normalizeReviewItem(doc) {
     tagLabel:
       cleanText(review.tagLabel),
 
+      status:
+  cleanText(review.status) ||
+  "published",
+
+moderation: {
+  hiddenReason:
+    cleanText(
+      review.moderation?.hiddenReason ||
+      review.moderation?.reason
+    ),
+
+  hiddenAt:
+    normalizeReviewDate(
+      review.moderation?.hiddenAt
+    ),
+
+  hiddenBy:
+    cleanText(
+      review.moderation?.hiddenBy
+    ) || null,
+
+  restoredAt:
+    normalizeReviewDate(
+      review.moderation?.restoredAt
+    ),
+
+  restoredBy:
+    cleanText(
+      review.moderation?.restoredBy
+    ) || null,
+},
+
     createdAt:
       normalizeReviewDate(
         review.createdAt
@@ -339,9 +371,13 @@ async function getCurrentUserReview(
       return null;
     }
 
+    const reviewStatus =
+      cleanText(review.status) ||
+      "published";
+
     if (
-      cleanText(review.status) !==
-      "published"
+      reviewStatus !== "published" &&
+      reviewStatus !== "hidden"
     ) {
       return null;
     }
@@ -464,18 +500,28 @@ async function getRecentLsearchReviews(
 
   try {
     const snapshot = await db
-      .collection("placeReviews")
-      .where(
-        "placeId",
-        "==",
-        cleanPlaceId
-      )
-      .orderBy(
-        "createdAt",
-        "desc"
-      )
-      .limit(limit + 5)
-      .get();
+  .collection("placeReviews")
+  .where(
+    "placeId",
+    "==",
+    cleanPlaceId
+  )
+  .where(
+    "status",
+    "==",
+    "published"
+  )
+  .where(
+    "deletedAt",
+    "==",
+    null
+  )
+  .orderBy(
+    "createdAt",
+    "desc"
+  )
+  .limit(limit + 5)
+  .get();
 
     return snapshot.docs
       .map(normalizeReviewItem)
@@ -909,17 +955,12 @@ export default async function getPlaceDetailService({
     );
 
   const lsearchReviews =
-    currentUserReview
-      ? [
-          currentUserReview,
-          ...recentLsearchReviews,
-        ]
-      : recentLsearchReviews;
+  recentLsearchReviews;
 
   const recommendsPercent =
-    normalizeRecommendationPercent(
-      place
-    );
+  normalizeRecommendationPercent(
+    place
+  );
 
   return {
     place: {

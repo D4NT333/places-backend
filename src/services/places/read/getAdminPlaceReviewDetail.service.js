@@ -148,6 +148,42 @@ function normalizeReviewDetail(snapshot) {
   };
 }
 
+async function getReviewReportsSummary(reviewId) {
+  const snapshot = await db
+    .collection("reports")
+    .where("review.reviewId", "==", reviewId)
+    .where("deletedAt", "==", null)
+    .get();
+
+  let pending = 0;
+  let resolved = 0;
+  let discarded = 0;
+
+  snapshot.docs.forEach((document) => {
+    const report = document.data();
+    const status = cleanText(report.status) || "pending";
+
+    if (status === "pending") {
+      pending += 1;
+    }
+
+    if (status === "resolved") {
+      resolved += 1;
+    }
+
+    if (status === "discarded") {
+      discarded += 1;
+    }
+  });
+
+  return {
+    total: snapshot.size,
+    pending,
+    resolved,
+    discarded,
+  };
+}
+
 export default async function getAdminPlaceReviewDetailService({
   placeId,
   reviewId,
@@ -181,18 +217,25 @@ export default async function getAdminPlaceReviewDetailService({
     );
   }
 
-  const review = reviewSnapshot.data();
+ const review = reviewSnapshot.data();
 
-  if (cleanText(review.placeId) !== cleanPlaceId) {
-    throw createHttpError(
-      "La reseña no pertenece al lugar indicado.",
-      409,
-    );
-  }
+if (cleanText(review.placeId) !== cleanPlaceId) {
+  throw createHttpError(
+    "La reseña no pertenece al lugar indicado.",
+    409,
+  );
+}
 
-  return {
-    review: normalizeReviewDetail(
-      reviewSnapshot,
-    ),
-  };
+const reportsSummary =
+  await getReviewReportsSummary(cleanReviewId);
+
+return {
+  review: {
+    ...normalizeReviewDetail(reviewSnapshot),
+
+    reportCount: reportsSummary.total,
+
+    reports: reportsSummary,
+  },
+};
 }
