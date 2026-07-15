@@ -80,14 +80,16 @@ function getRelatedTo(report = {}) {
 
   if (report.reportTarget === "user") {
     if (report.source === "review") {
-      return {
-        type: "review",
-        label: report.reportedUser?.name
-          ? `Reseña de ${report.reportedUser.name}`
-          : "Reseña reportada",
-        id: report.review?.reviewId || null,
-      };
-    }
+  return {
+    type: "review",
+    label: report.reportedUser?.name
+      ? `Reseña de ${report.reportedUser.name}`
+      : "Reseña reportada",
+
+    id: report.reportedUser?.uid || null,
+    reviewId: report.review?.reviewId || null,
+  };
+}
 
     return {
       type: "user",
@@ -107,34 +109,67 @@ function normalizeReport(doc) {
   const data = doc.data();
   const relatedTo = getRelatedTo(data);
 
-  const reporterName = data.reporter?.name || "Usuario";
+  const reporterName =
+    data.reporter?.name ||
+    "Usuario";
 
   return {
     id: doc.id,
     reportId: data.reportId || doc.id,
 
     type: data.reportTarget || "general",
-    typeLabel: TARGET_LABELS[data.reportTarget] || "General",
+    typeLabel:
+      TARGET_LABELS[data.reportTarget] ||
+      "General",
 
     reasonId: data.reasonId || "",
-    reasonLabel: data.reasonLabel || "Motivo no especificado",
+    reasonLabel:
+      data.reasonLabel ||
+      "Motivo no especificado",
 
     relatedTo,
 
+    reportedUser: {
+      uid: data.reportedUser?.uid || "",
+      name:
+        data.reportedUser?.name ||
+        "Usuario desconocido",
+      email:
+        data.reportedUser?.email || "",
+      photoURL:
+        data.reportedUser?.photoURL || "",
+    },
+
     status: data.status || "pending",
-    statusLabel: STATUS_LABELS[data.status] || "Pendiente",
+    statusLabel:
+      STATUS_LABELS[data.status] ||
+      "Pendiente",
 
     priority: data.priority || "normal",
     source: data.source || "manual",
+
+    metadata: {
+      app: data.metadata?.app || "",
+      createdFrom:
+        data.metadata?.createdFrom || "",
+    },
+
+    message: data.message || "",
 
     reporter: {
       uid: data.reporter?.uid || "",
       name: reporterName,
       email: data.reporter?.email || "",
-      photoURL: data.reporter?.photoURL || "",
-      initial: reporterName.charAt(0).toUpperCase(),
+      photoURL:
+        data.reporter?.photoURL || "",
+      initial:
+        reporterName.charAt(0).toUpperCase(),
     },
 
+    assignedTo: data.assignedTo || null,
+    resolutionNote: data.resolutionNote || "",
+    resolvedAt: toISOString(data.resolvedAt),
+    resolvedBy: data.resolvedBy || null,
     createdAt: toISOString(data.createdAt),
     updatedAt: toISOString(data.updatedAt),
   };
