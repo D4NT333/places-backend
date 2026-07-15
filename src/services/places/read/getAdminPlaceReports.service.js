@@ -18,8 +18,9 @@ const MAX_LIMIT = 25;
 const ALLOWED_STATUSES = new Set([
   "all",
   "pending",
+  "in_review",
   "resolved",
-  "discarded",
+  "dismissed",
 ]);
 
 function createHttpError(message, statusCode) {
@@ -57,6 +58,10 @@ function normalizeReport(snapshot) {
     message: report.message || "",
     priority: report.priority || "normal",
     status: report.status || "pending",
+
+    source:
+  report.source ||
+  "place_detail",
 
     place: {
       placeId: report.place?.placeId || null,
