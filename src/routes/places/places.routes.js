@@ -16,7 +16,7 @@ import getAdminPlaceReportsController from "../../controllers/places/getAdminPla
 import getAdminPlaceSubmissionsController from "../../controllers/places/getAdminPlaceSubmissions.controller.js";
 import getAdminPlaceReviewDetailController from "../../controllers/places/getAdminPlaceReviewDetail.controller.js";
 import updateAdminPlaceReviewVisibilityController from "../../controllers/places/updateAdminPlaceReviewVisibility.controller.js";
-
+import getAdminPlaceLsearchGalleryController from "../../controllers/places/getAdminPlaceLsearchGallery.controller.js";
 import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
 
 const router = Router();
@@ -58,7 +58,11 @@ router.get("/admin/:placeId/reports",verifyFirebaseToken,getAdminPlaceReportsCon
 
 router.get("/admin/:placeId/submissions",verifyFirebaseToken,getAdminPlaceSubmissionsController);
 
-router.patch("/admin/:placeId/reviews/:reviewId/visibility",verifyFirebaseToken,updateAdminPlaceReviewVisibilityController,);
+router.patch("/admin/:placeId/reviews/:reviewId/visibility",verifyFirebaseToken,updateAdminPlaceReviewVisibilityController);
+
+router.get("/admin/:placeId/lsearch-gallery",verifyFirebaseToken,  getAdminPlaceLsearchGalleryController);
+
+
 
 
 export default router;  
