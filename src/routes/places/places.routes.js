@@ -17,7 +17,17 @@ import getAdminPlaceSubmissionsController from "../../controllers/places/getAdmi
 import getAdminPlaceReviewDetailController from "../../controllers/places/getAdminPlaceReviewDetail.controller.js";
 import updateAdminPlaceReviewVisibilityController from "../../controllers/places/updateAdminPlaceReviewVisibility.controller.js";
 import getAdminPlaceLsearchGalleryController from "../../controllers/places/getAdminPlaceLsearchGallery.controller.js";
+import getAdminPlaceAnalyticsController from "../../controllers/places/getAdminPlaceAnalytics.controller.js";
+
+import resolveAdminPlaceReportController from "../../controllers/places/resolveAdminPlaceReport.controller.js"
+import moderateAdminPlaceController from "../../controllers/places/moderateAdminPlace.controller.js"
+
 import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
+
+import registerPlaceViewController from "../../controllers/places/interactions/registerPlaceView.controller.js";
+import togglePlaceLikeController from "../../controllers/places/interactions/togglePlaceLike.controller.js";
+import startPlaceDwellSessionController from "../../controllers/places/interactions/startPlaceDwellSession.controller.js";
+import closePlaceDwellSessionController from "../../controllers/places/interactions/closePlaceDwellSession.controller.js";
 
 const router = Router();
 
@@ -62,8 +72,20 @@ router.patch("/admin/:placeId/reviews/:reviewId/visibility",verifyFirebaseToken,
 
 router.get("/admin/:placeId/lsearch-gallery",verifyFirebaseToken,  getAdminPlaceLsearchGalleryController);
 
+router.get("/admin/:placeId/analytics",verifyFirebaseToken,getAdminPlaceAnalyticsController);
 
 
+router.post("/:placeId/views",verifyFirebaseToken,registerPlaceViewController);
+
+router.post("/:placeId/likes/toggle",verifyFirebaseToken,togglePlaceLikeController);
+
+router.post("/:placeId/dwell-sessions",verifyFirebaseToken,startPlaceDwellSessionController);
+
+router.patch("/:placeId/dwell-sessions/:sessionId/close",verifyFirebaseToken,closePlaceDwellSessionController);
+
+router.patch("/admin/:placeId/reports/:reportId/resolve",verifyFirebaseToken,resolveAdminPlaceReportController);
+
+router.patch("/admin/:placeId/moderation",verifyFirebaseToken,moderateAdminPlaceController);
 
 export default router;  
 
