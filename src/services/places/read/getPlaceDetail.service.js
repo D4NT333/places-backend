@@ -834,31 +834,35 @@ export default async function getPlaceDetailService({
     throw error;
   }
 
-  const place =
-    placeDoc.data();
+ const place =
+  placeDoc.data();
 
-  if (place.deletedAt) {
-    const error = new Error(
-      "El lugar ya no está disponible."
-    );
+if (place.deletedAt) {
+  const error = new Error(
+    "El lugar ya no está disponible."
+  );
 
-    error.statusCode = 404;
+  error.statusCode = 404;
 
-    throw error;
-  }
+  throw error;
+}
 
-  if (
-    cleanText(place.status) !==
-    "published"
-  ) {
-    const error = new Error(
-      "El lugar no está publicado."
-    );
+const placeStatus =
+  cleanText(
+    place.status
+  ).toLowerCase();
 
-    error.statusCode = 404;
+if (
+  placeStatus === "hidden"
+) {
+  const error = new Error(
+    "El lugar no está disponible."
+  );
 
-    throw error;
-  }
+  error.statusCode = 404;
+
+  throw error;
+}
 
   const subtagsWithLabels =
     await normalizeSubtagsWithLabels(

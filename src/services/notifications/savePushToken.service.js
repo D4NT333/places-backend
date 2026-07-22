@@ -7,7 +7,11 @@ function encodeTokenId(token) {
   return Buffer.from(token).toString("base64url");
 }
 
-export async function savePushTokenService({ uid, expoPushToken, platform }) {
+export async function savePushTokenService({
+  uid,
+  expoPushToken,
+  platform,
+}) {
   if (!uid) {
     const error = new Error("Usuario no autenticado.");
     error.statusCode = 401;
@@ -23,24 +27,29 @@ export async function savePushTokenService({ uid, expoPushToken, platform }) {
   const tokenId = encodeTokenId(expoPushToken);
 
   const tokenRef = db
-    .collection("users")
+    .collection("user")
     .doc(uid)
     .collection("pushTokens")
     .doc(tokenId);
 
+  const tokenSnapshot = await tokenRef.get();
   const now = admin.firestore.FieldValue.serverTimestamp();
 
-  await tokenRef.set(
-    {
-      token: expoPushToken,
-      platform: platform || "android",
-      enabled: true,
-      createdAt: now,
-      updatedAt: now,
-      lastSeenAt: now,
-    },
-    { merge: true }
-  );
+  const tokenData = {
+    token: expoPushToken,
+    platform: platform || "android",
+    enabled: true,
+    updatedAt: now,
+    lastSeenAt: now,
+  };
+
+  if (!tokenSnapshot.exists) {
+    tokenData.createdAt = now;
+  }
+
+  await tokenRef.set(tokenData, {
+    merge: true,
+  });
 
   return {
     ok: true,

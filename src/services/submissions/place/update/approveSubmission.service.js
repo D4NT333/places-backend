@@ -1,6 +1,14 @@
 import { db } from "../../../../config/firebase.js";
 import admin from "firebase-admin";
 
+import {
+  createUserNotificationService,
+} from "../../../notifications/createUserNotification.service.js";
+
+import {
+  sendPushNotificationToUserService,
+} from "../../../notifications/sendPushNotificationToUser.service.js";
+
 const PLACE_SUBMISSIONS_COLLECTION = "placeSubmissions";
 const PLACES_COLLECTION = "places";
 
@@ -32,14 +40,14 @@ function normalizeReferenceIds(values, prefix) {
               value.id ||
                 value.value ||
                 value.subtagId ||
-                value.approachId
+                value.approachId,
             );
           }
 
           return "";
         })
         .filter(Boolean)
-        .filter((value) => value.startsWith(prefix))
+        .filter((value) => value.startsWith(prefix)),
     ),
   ];
 }
@@ -55,22 +63,41 @@ function normalizeLocation(location) {
   return { lat, lng };
 }
 
-function normalizePhoto(photo, index, submissionId, uploadedBy) {
-  const mediumUrl = cleanString(photo?.medium?.url || photo?.mediumUrl);
-  const thumbnailUrl = cleanString(photo?.thumbnail?.url || photo?.thumbnailUrl);
-  const originalUrl = cleanString(photo?.original?.url || photo?.originalUrl);
+function normalizePhoto(
+  photo,
+  index,
+  submissionId,
+  uploadedBy,
+) {
+  const mediumUrl = cleanString(
+    photo?.medium?.url || photo?.mediumUrl,
+  );
+
+  const thumbnailUrl = cleanString(
+    photo?.thumbnail?.url || photo?.thumbnailUrl,
+  );
+
+  const originalUrl = cleanString(
+    photo?.original?.url || photo?.originalUrl,
+  );
 
   return {
     ...photo,
 
-    photoId: cleanString(photo?.photoId) || `photo_${index + 1}`,
+    photoId:
+      cleanString(photo?.photoId) ||
+      `photo_${index + 1}`,
+
     order: index,
     source: "user",
     sourceSubmissionId: submissionId,
     uploadedBy,
 
     url: mediumUrl || originalUrl || thumbnailUrl,
-    path: cleanString(photo?.medium?.path || photo?.path),
+
+    path: cleanString(
+      photo?.medium?.path || photo?.path,
+    ),
 
     widthPx:
       photo?.medium?.width ??
@@ -124,158 +151,260 @@ export default async function approvePlaceSubmissionService({
   approvedBy,
 }) {
   if (!submissionId) {
-    throw createServiceError("Falta el id de la propuesta.", 400);
+    throw createServiceError(
+      "Falta el id de la propuesta.",
+      400,
+    );
   }
 
   const submissionRef = db
     .collection(PLACE_SUBMISSIONS_COLLECTION)
     .doc(submissionId);
 
-  return db.runTransaction(async (transaction) => {
-    const submissionSnap = await transaction.get(submissionRef);
+  const approvalResult = await db.runTransaction(
+    async (transaction) => {
+      const submissionSnap =
+        await transaction.get(submissionRef);
 
-    if (!submissionSnap.exists) {
-      throw createServiceError("La propuesta no existe.", 404);
-    }
+      if (!submissionSnap.exists) {
+        throw createServiceError(
+          "La propuesta no existe.",
+          404,
+        );
+      }
 
-    const submission = submissionSnap.data();
+      const submission = submissionSnap.data();
 
-    if (!["pending", "in_review", "resubmitted"].includes(submission.status)) {
-      throw createServiceError(
-        "Esta propuesta ya fue procesada.",
-        409
+      if (
+        ![
+          "pending",
+          "in_review",
+          "resubmitted",
+        ].includes(submission.status)
+      ) {
+        throw createServiceError(
+          "Esta propuesta ya fue procesada.",
+          409,
+        );
+      }
+
+      const location = normalizeLocation(
+        submission.location,
+      );
+
+      if (!location) {
+        throw createServiceError(
+          "La ubicación de la propuesta no es válida.",
+          400,
+        );
+      }
+
+      const photos = Array.isArray(submission.photos)
+        ? submission.photos.map((photo, index) =>
+            normalizePhoto(
+              photo,
+              index,
+              submission.placeSubmissionId ||
+                submissionId,
+              submission.createdBy,
+            ),
+          )
+        : [];
+
+      if (photos.length < 1) {
+        throw createServiceError(
+          "La propuesta no tiene fotos válidas.",
+          400,
+        );
+      }
+
+      const normalizedSubtags =
+        normalizeReferenceIds(
+          submission.subtags,
+          "subtag_",
+        );
+
+      const normalizedApproaches =
+        normalizeReferenceIds(
+          submission.approaches,
+          "approach_",
+        );
+
+      if (normalizedSubtags.length === 0) {
+        throw createServiceError(
+          "La propuesta no contiene IDs válidos de subetiquetas.",
+          400,
+        );
+      }
+
+      if (normalizedApproaches.length === 0) {
+        throw createServiceError(
+          "La propuesta no contiene IDs válidos de enfoques.",
+          400,
+        );
+      }
+
+      const now =
+        admin.firestore.FieldValue.serverTimestamp();
+
+      const placeRef = db
+        .collection(PLACES_COLLECTION)
+        .doc();
+
+      const approvedAtIso =
+        new Date().toISOString();
+
+      const mainPhoto = {
+        ...photos[0],
+        approvedAt: approvedAtIso,
+      };
+
+      const placeData = {
+        placeId: placeRef.id,
+
+        name: cleanString(submission.name),
+        description: cleanString(
+          submission.description,
+        ),
+        address: cleanString(submission.address),
+
+        location,
+
+        tagId: cleanString(submission.tagId),
+        tagLabel: cleanString(
+          submission.tagLabel,
+        ),
+
+        subtags: normalizedSubtags,
+        approaches: normalizedApproaches,
+
+        price: cleanString(submission.price),
+        priceRangeId: cleanString(
+          submission.priceRangeId,
+        ),
+
+        openingHours:
+          submission.openingHours || {
+            type: "not_specified",
+            label: "Horario no especificado",
+            days: [],
+            openTime: null,
+            closeTime: null,
+            isOpenNow: false,
+            lastScheduleCheckAt: null,
+          },
+
+        photos: photos.map((photo) => ({
+          ...photo,
+          approvedAt: approvedAtIso,
+        })),
+
+        mainPhoto,
+        photoCount: photos.length,
+
+        metrics: buildMetrics(),
+        trend: buildTrend(),
+
+        status: "published",
+        activityStatus: "active",
+        source: "mobile",
+
+        createdBy: submission.createdBy || null,
+        createdAt: now,
+        updatedAt: now,
+
+        deletedAt: null,
+        lastInteractionAt: null,
+
+        origin: {
+          type: "place_submission",
+          submissionId,
+          placeSubmissionId:
+            submission.placeSubmissionId ||
+            submissionId,
+          submittedBy:
+            submission.createdBy || null,
+          approvedBy:
+            approvedBy || "admin_panel",
+          approvedAt: now,
+        },
+      };
+
+      transaction.set(placeRef, placeData);
+
+      transaction.update(submissionRef, {
+        status: "approved",
+        approvedAt: now,
+        approvedBy:
+          approvedBy || "admin_panel",
+        createdPlaceId: placeRef.id,
+        updatedAt: now,
+      });
+
+      return {
+        placeId: placeRef.id,
+        submissionId,
+        status: "approved",
+        createdBy: submission.createdBy || null,
+        placeName: cleanString(submission.name),
+      };
+    },
+  );
+
+  const notificationData = {
+    screen: "VisualizedAddedPlacesScreen",
+    type: "place_submission_approved",
+    submissionId: approvalResult.submissionId,
+    placeId: approvalResult.placeId,
+  };
+
+  if (approvalResult.createdBy) {
+    const title = "Tu propuesta fue aprobada";
+
+    const body = approvalResult.placeName
+      ? `Tu propuesta de “${approvalResult.placeName}” fue aprobada y publicada.`
+      : "Tu propuesta de lugar fue aprobada y publicada.";
+
+    try {
+      const notification =
+        await createUserNotificationService({
+          uid: approvalResult.createdBy,
+          type: "place_submission_approved",
+          title,
+          body,
+          data: notificationData,
+        });
+
+      const pushResult =
+        await sendPushNotificationToUserService({
+          uid: approvalResult.createdBy,
+          title,
+          body,
+          data: {
+            ...notificationData,
+            notificationId: notification.id,
+          },
+        });
+
+      console.log(
+        "Notificación de aprobación enviada:",
+        {
+          submissionId,
+          uid: approvalResult.createdBy,
+          sent: pushResult.sent,
+        },
+      );
+    } catch (notificationError) {
+      console.error(
+        "La propuesta fue aprobada, pero falló la notificación:",
+        notificationError,
       );
     }
+  }
 
-    const location = normalizeLocation(submission.location);
-
-    if (!location) {
-      throw createServiceError("La ubicación de la propuesta no es válida.", 400);
-    }
-
-    const photos = Array.isArray(submission.photos)
-      ? submission.photos.map((photo, index) =>
-          normalizePhoto(
-            photo,
-            index,
-            submission.placeSubmissionId || submissionId,
-            submission.createdBy
-          )
-        )
-      : [];
-
-    if (photos.length < 1) {
-      throw createServiceError("La propuesta no tiene fotos válidas.", 400);
-    }
-
-    const normalizedSubtags = normalizeReferenceIds(
-  submission.subtags,
-  "subtag_"
-);
-
-const normalizedApproaches = normalizeReferenceIds(
-  submission.approaches,
-  "approach_"
-);
-
-if (normalizedSubtags.length === 0) {
-  throw createServiceError(
-    "La propuesta no contiene IDs válidos de subetiquetas.",
-    400
-  );
-}
-
-if (normalizedApproaches.length === 0) {
-  throw createServiceError(
-    "La propuesta no contiene IDs válidos de enfoques.",
-    400
-  );
-}
-
-    const now = admin.firestore.FieldValue.serverTimestamp();
-
-    const placeRef = db.collection(PLACES_COLLECTION).doc();
-
-    const mainPhoto = {
-      ...photos[0],
-      approvedAt: new Date().toISOString(),
-    };
-
-    const placeData = {
-      placeId: placeRef.id,
-
-      name: cleanString(submission.name),
-      description: cleanString(submission.description),
-      address: cleanString(submission.address),
-
-      location,
-
-      tagId: cleanString(submission.tagId),
-      tagLabel: cleanString(submission.tagLabel),
-
-     subtags: normalizedSubtags,
-     approaches: normalizedApproaches,
-
-      price: cleanString(submission.price),
-      priceRangeId: cleanString(submission.priceRangeId),
-
-      openingHours: submission.openingHours || {
-        type: "not_specified",
-        label: "Horario no especificado",
-        days: [],
-        openTime: null,
-        closeTime: null,
-        isOpenNow: false,
-        lastScheduleCheckAt: null,
-      },
-
-      photos: photos.map((photo) => ({
-        ...photo,
-        approvedAt: new Date().toISOString(),
-      })),
-
-      mainPhoto,
-      photoCount: photos.length,
-
-      metrics: buildMetrics(),
-      trend: buildTrend(),
-
-      status: "published",
-      activityStatus: "active",
-      source: "mobile",
-
-      createdBy: submission.createdBy || null,
-      createdAt: now,
-      updatedAt: now,
-
-      deletedAt: null,
-      lastInteractionAt: null,
-
-      origin: {
-        type: "place_submission",
-        submissionId,
-        placeSubmissionId:
-          submission.placeSubmissionId || submissionId,
-        submittedBy: submission.createdBy || null,
-        approvedBy: approvedBy || "admin_panel",
-        approvedAt: now,
-      },
-    };
-
-    transaction.set(placeRef, placeData);
-
-    transaction.update(submissionRef, {
-      status: "approved",
-      approvedAt: now,
-      approvedBy: approvedBy || "admin_panel",
-      createdPlaceId: placeRef.id,
-      updatedAt: now,
-    });
-
-    return {
-      placeId: placeRef.id,
-      submissionId,
-      status: "approved",
-    };
-  });
+  return {
+    placeId: approvalResult.placeId,
+    submissionId: approvalResult.submissionId,
+    status: approvalResult.status,
+  };
 }

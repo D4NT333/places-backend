@@ -1,5 +1,13 @@
 import { db } from "../../../../config/firebase.js";
 
+import {
+  createUserNotificationService,
+} from "../../../notifications/createUserNotification.service.js";
+
+import {
+  sendPushNotificationToUserService,
+} from "../../../notifications/sendPushNotificationToUser.service.js";
+
 const PHOTO_SUBMISSIONS_COLLECTION =
   "photoSubmissions";
 
@@ -12,6 +20,18 @@ function cleanString(value) {
   return typeof value === "string"
     ? value.trim()
     : "";
+}
+
+function getUserUid(submissionData = {}) {
+  return (
+    cleanString(submissionData.createdBy?.uid) ||
+    cleanString(submissionData.createdBy) ||
+    cleanString(submissionData.uid) ||
+    cleanString(submissionData.submittedBy?.uid) ||
+    cleanString(submissionData.submittedBy) ||
+    cleanString(submissionData.userId) ||
+    null
+  );
 }
 
 function createServiceError(
@@ -481,30 +501,20 @@ export default async function approvePhotoSubmissionService({
             ? submissionData.photos
             : [];
 
-        const newUserPhotos =
-          submissionPhotos
-            .map(
-              (
-                photo,
-                index
-              ) =>
-                normalizeApprovedPhoto({
-                  photo,
-                  index,
-
-                  submissionId:
-                    normalizedSubmissionId,
-
-                  createdBy:
-                    cleanString(
-                      submissionData
-                        .createdBy
-                    ),
-
-                  approvedAt,
-                })
-            )
-            .filter(Boolean);
+    const newUserPhotos =
+  submissionPhotos
+    .map((photo, index) =>
+      normalizeApprovedPhoto({
+        photo,
+        index,
+        submissionId:
+          normalizedSubmissionId,
+        createdBy:
+          getUserUid(submissionData),
+        approvedAt,
+      })
+    )
+    .filter(Boolean);
 
         if (
           newUserPhotos.length ===
@@ -613,48 +623,88 @@ export default async function approvePhotoSubmissionService({
         );
 
         return {
-          id:
-            submissionSnapshot.id,
+  id: submissionSnapshot.id,
 
-          submissionId:
-            cleanString(
-              submissionData
-                .submissionId
-            ) ||
-            submissionSnapshot.id,
+  submissionId:
+    cleanString(submissionData.submissionId) ||
+    submissionSnapshot.id,
 
-          placeId,
+  placeId,
 
-          placeName:
-            cleanString(
-              submissionData
-                .placeName
-            ) ||
-            cleanString(
-              placeData.name
-            ) ||
-            "Lugar sin nombre",
+  placeName:
+    cleanString(submissionData.placeName) ||
+    cleanString(placeData.name) ||
+    "Lugar sin nombre",
 
-          status:
-            "approved",
+  createdBy: getUserUid(submissionData),
 
-          approvedAt:
-            approvedAt
-              .toISOString(),
+  status: "approved",
 
-          approvedBy:
-            normalizedApprovedBy,
+  approvedAt: approvedAt.toISOString(),
 
-          approvedPhotosCount:
-            newUserPhotos.length,
+  approvedBy: normalizedApprovedBy,
 
-          placePhotoCount:
-            nextPhotos.length,
+  approvedPhotosCount: newUserPhotos.length,
 
-          mainPhoto,
-        };
+  placePhotoCount: nextPhotos.length,
+
+  mainPhoto,
+};
+
       }
     );
 
-  return result;
+  const notificationData = {
+  screen: "VisualizedAddedPhotosScreen",
+  type: "photo_submission_approved",
+  submissionId: result.submissionId,
+  placeId: result.placeId,
+};
+
+if (result.createdBy) {
+  const title = "Tus fotografías fueron aprobadas";
+
+  const body =
+    result.approvedPhotosCount === 1
+      ? `Tu fotografía para “${result.placeName}” fue aprobada.`
+      : `Tus ${result.approvedPhotosCount} fotografías para “${result.placeName}” fueron aprobadas.`;
+
+  try {
+    const notification =
+      await createUserNotificationService({
+        uid: result.createdBy,
+        type: "photo_submission_approved",
+        title,
+        body,
+        data: notificationData,
+      });
+
+    const pushResult =
+      await sendPushNotificationToUserService({
+        uid: result.createdBy,
+        title,
+        body,
+        data: {
+          ...notificationData,
+          notificationId: notification.id,
+        },
+      });
+
+    console.log(
+      "Notificación de fotografías aprobadas enviada:",
+      {
+        submissionId: result.submissionId,
+        uid: result.createdBy,
+        sent: pushResult.sent,
+      },
+    );
+  } catch (notificationError) {
+    console.error(
+      "Las fotografías fueron aprobadas, pero falló la notificación:",
+      notificationError,
+    );
+  }
+}
+
+return result;
 }

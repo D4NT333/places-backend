@@ -16,7 +16,7 @@ export async function createUserNotificationService({
   }
 
   const notificationRef = db
-    .collection("users")
+    .collection("user")
     .doc(uid)
     .collection("notifications")
     .doc();

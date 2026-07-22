@@ -40,10 +40,15 @@ function assertPlaceCanReceiveDwellTime(place) {
     );
   }
 
-  if (place.status !== "published") {
+  const status =
+    typeof place.status === "string"
+      ? place.status.trim().toLowerCase()
+      : "published";
+
+  if (status === "hidden") {
     throw createHttpError(
-      "El lugar solicitado no está publicado.",
-      409,
+      "El lugar solicitado no está disponible.",
+      404,
     );
   }
 }

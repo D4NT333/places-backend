@@ -1,5 +1,13 @@
 import { db } from "../../../../config/firebase.js";
 
+import {
+  createUserNotificationService,
+} from "../../../notifications/createUserNotification.service.js";
+
+import {
+  sendPushNotificationToUserService,
+} from "../../../notifications/sendPushNotificationToUser.service.js";
+
 const PHOTO_SUBMISSIONS_COLLECTION =
   "photoSubmissions";
 
@@ -18,6 +26,18 @@ function cleanString(value) {
   return typeof value === "string"
     ? value.trim()
     : "";
+}
+
+function getUserUid(submissionData = {}) {
+  return (
+    cleanString(submissionData.createdBy?.uid) ||
+    cleanString(submissionData.createdBy) ||
+    cleanString(submissionData.uid) ||
+    cleanString(submissionData.submittedBy?.uid) ||
+    cleanString(submissionData.submittedBy) ||
+    cleanString(submissionData.userId) ||
+    null
+  );
 }
 
 function createServiceError(
@@ -160,39 +180,92 @@ export default async function rejectPhotoSubmissionService({
       );
 
       return {
-        id:
-          submissionSnapshot.id,
+  id: submissionSnapshot.id,
 
-        submissionId:
-          cleanString(
-            submissionData.submissionId
-          ) ||
-          submissionSnapshot.id,
+  submissionId:
+    cleanString(
+      submissionData.submissionId
+    ) ||
+    submissionSnapshot.id,
 
-        placeId:
-          cleanString(
-            submissionData.placeId
-          ),
+  placeId:
+    cleanString(
+      submissionData.placeId
+    ),
 
-        placeName:
-          cleanString(
-            submissionData.placeName
-          ) ||
-          "Lugar sin nombre",
+  placeName:
+    cleanString(
+      submissionData.placeName
+    ) ||
+    "Lugar sin nombre",
 
-        status:
-          "rejected",
+  createdBy:
+    getUserUid(submissionData),
 
-        rejectionReason,
+  status:
+    "rejected",
 
-        rejectedAt:
-          rejectedAt.toISOString(),
+  rejectionReason,
 
-        rejectedBy:
-          normalizedRejectedBy,
-      };
+  rejectedAt:
+    rejectedAt.toISOString(),
+
+  rejectedBy:
+    normalizedRejectedBy,
+};
+
     }
   );
 
-  return result;
+  const notificationData = {
+  screen: "VisualizedAddedPhotosScreen",
+  type: "photo_submission_rejected",
+  submissionId: result.submissionId,
+  placeId: result.placeId,
+};
+
+if (result.createdBy) {
+  const title = "Tus fotografías fueron rechazadas";
+
+  const body =
+    `Tu propuesta de fotografías para “${result.placeName}” fue rechazada. Revisa el motivo.`;
+
+  try {
+    const notification =
+      await createUserNotificationService({
+        uid: result.createdBy,
+        type: "photo_submission_rejected",
+        title,
+        body,
+        data: notificationData,
+      });
+
+    const pushResult =
+      await sendPushNotificationToUserService({
+        uid: result.createdBy,
+        title,
+        body,
+        data: {
+          ...notificationData,
+          notificationId: notification.id,
+        },
+      });
+
+    console.log(
+      "Notificación de fotografías rechazadas enviada:",
+      {
+        submissionId: result.submissionId,
+        uid: result.createdBy,
+        sent: pushResult.sent,
+      },
+    );
+  } catch (notificationError) {
+    console.error(
+      "Las fotografías fueron rechazadas, pero falló la notificación:",
+      notificationError,
+    );
+  }
+}
+
+return result;
 }

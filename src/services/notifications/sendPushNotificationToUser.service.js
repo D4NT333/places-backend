@@ -19,7 +19,7 @@ export async function sendPushNotificationToUserService({
   }
 
   const tokensSnapshot = await db
-    .collection("users")
+    .collection("user")
     .doc(uid)
     .collection("pushTokens")
     .where("enabled", "==", true)
@@ -41,12 +41,14 @@ export async function sendPushNotificationToUserService({
     if (!Expo.isExpoPushToken(tokenData.token)) return;
 
     messages.push({
-      to: tokenData.token,
-      sound: "default",
-      title,
-      body,
-      data,
-    });
+  to: tokenData.token,
+  sound: "default",
+  title,
+  body,
+  data,
+  channelId: "default",
+  priority: "high",
+});
   });
 
   if (messages.length === 0) {

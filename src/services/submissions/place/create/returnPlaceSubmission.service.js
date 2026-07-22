@@ -1,5 +1,13 @@
 import { db, FieldValue } from "../../../../config/firebase.js";
 
+import {
+  createUserNotificationService,
+} from "../../../notifications/createUserNotification.service.js";
+
+import {
+  sendPushNotificationToUserService,
+} from "../../../notifications/sendPushNotificationToUser.service.js";
+
 const DEFAULT_OPENING_HOURS = {
   type: "not_specified",
   days: [],
@@ -363,9 +371,69 @@ export default async function returnPlaceSubmissionService({
 
   await batch.commit();
 
-  return {
-    returnId,
-    submissionId,
-    status: "returned",
-  };
+  await batch.commit();
+
+const userId = submissionData.createdBy || null;
+const placeName =
+  typeof submissionData.name === "string"
+    ? submissionData.name.trim()
+    : "";
+
+const notificationData = {
+  screen: "VisualizedAddedPlacesScreen",
+  type: "place_submission_returned",
+  submissionId,
+  returnId,
+};
+
+if (userId) {
+  const title = "Tu propuesta necesita cambios";
+
+  const body = placeName
+    ? `Revisa las correcciones solicitadas para “${placeName}”.`
+    : "Tu propuesta de lugar necesita algunas correcciones.";
+
+  try {
+    const notification =
+      await createUserNotificationService({
+        uid: userId,
+        type: "place_submission_returned",
+        title,
+        body,
+        data: notificationData,
+      });
+
+    const pushResult =
+      await sendPushNotificationToUserService({
+        uid: userId,
+        title,
+        body,
+        data: {
+          ...notificationData,
+          notificationId: notification.id,
+        },
+      });
+
+    console.log(
+      "Notificación de devolución enviada:",
+      {
+        submissionId,
+        returnId,
+        uid: userId,
+        sent: pushResult.sent,
+      },
+    );
+  } catch (notificationError) {
+    console.error(
+      "La propuesta fue devuelta, pero falló la notificación:",
+      notificationError,
+    );
+  }
+}
+
+return {
+  returnId,
+  submissionId,
+  status: "returned",
+};
 }

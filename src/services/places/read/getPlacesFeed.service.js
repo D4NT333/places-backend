@@ -178,12 +178,29 @@ async function mapPlaceForFeed(doc) {
 export default async function getPlacesFeedService({ limit, cursor } = {}) {
   const safeLimit = normalizeLimit(limit);
 
-  let query = db
-    .collection("places")
-    .where("status", "==", "published")
-    .where("deletedAt", "==", null)
-    .orderBy("updatedAt", "desc")
-    .limit(safeLimit + 1);
+let query = db
+  .collection("places")
+  .where(
+    "status",
+    "in",
+    [
+      "published",
+      "in_review",
+      "warned",
+    ]
+  )
+  .where(
+    "deletedAt",
+    "==",
+    null
+  )
+  .orderBy(
+    "updatedAt",
+    "desc"
+  )
+  .limit(
+    safeLimit + 1
+  );
 
   if (cursor) {
     const cursorDoc = await db.collection("places").doc(cursor).get();
