@@ -523,7 +523,7 @@ export default async function closePlaceDwellSessionService({
     });
 
     transaction.update(placeRef, {
-      lastInteractionAt: now,
+      
       updatedAt: now,
     });
 

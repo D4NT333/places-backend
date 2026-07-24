@@ -338,9 +338,13 @@ export default async function registerPlaceFromCandidateService({
     openingHours: normalizedOpeningHours,
 
     deletedAt: null,
-    updatedAt: now,
-    createdAt: now,
-    lastInteractionAt: null,
+
+createdAt: now,
+updatedAt: now,
+
+lastInteractionAt: now,
+activityStatusUpdatedAt: now,
+confirmationStartedAt: null,
 
     photos: normalizedPhotos,
     mainPhoto,

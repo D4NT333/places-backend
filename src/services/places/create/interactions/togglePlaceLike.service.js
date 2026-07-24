@@ -247,7 +247,7 @@ export default async function togglePlaceLikeService({
       transaction.update(placeRef, {
         "metrics.likesCount": updatedLikesCount,
 
-        lastInteractionAt: now,
+        
         updatedAt: now,
       });
 
@@ -264,7 +264,7 @@ export default async function togglePlaceLikeService({
           liked,
 
           lastLikeInteractionAt: now,
-          lastInteractionAt: now,
+         
 
           createdAt:
             interactionStateSnapshot.exists

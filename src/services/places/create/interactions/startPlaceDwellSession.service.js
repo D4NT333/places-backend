@@ -210,7 +210,7 @@ export default async function startPlaceDwellSessionService({
         activeDwellSessionStartedAt:
           now,
 
-        lastInteractionAt: now,
+        
 
         createdAt:
           interactionStateSnapshot.exists
@@ -225,7 +225,7 @@ export default async function startPlaceDwellSessionService({
     );
 
     transaction.update(placeRef, {
-      lastInteractionAt: now,
+    
       updatedAt: now,
     });
 

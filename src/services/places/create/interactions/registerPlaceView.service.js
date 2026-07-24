@@ -301,7 +301,7 @@ export default async function registerPlaceViewService({
         "metrics.viewsCount":
           FieldValue.increment(1),
 
-        lastInteractionAt: now,
+        
         updatedAt: now,
       });
 
@@ -312,7 +312,7 @@ export default async function registerPlaceViewService({
           placeId: normalizedPlaceId,
 
           lastCountedViewAt: now,
-          lastInteractionAt: now,
+          
 
           countedViews:
             FieldValue.increment(1),

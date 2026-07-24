@@ -305,16 +305,19 @@ export default async function approvePlaceSubmissionService({
         metrics: buildMetrics(),
         trend: buildTrend(),
 
-        status: "published",
-        activityStatus: "active",
-        source: "mobile",
+       status: "published",
+activityStatus: "active",
+source: "mobile",
 
-        createdBy: submission.createdBy || null,
-        createdAt: now,
-        updatedAt: now,
+createdBy: submission.createdBy || null,
+createdAt: now,
+updatedAt: now,
 
-        deletedAt: null,
-        lastInteractionAt: null,
+deletedAt: null,
+
+lastInteractionAt: now,
+activityStatusUpdatedAt: now,
+confirmationStartedAt: null,
 
         origin: {
           type: "place_submission",
