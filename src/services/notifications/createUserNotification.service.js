@@ -2,7 +2,7 @@ import admin from "firebase-admin";
 
 import { db } from "../../config/firebase.js";
 
-export async function createUserNotificationService({
+export  async function createUserNotificationService({
   uid,
   type,
   title,

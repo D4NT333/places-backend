@@ -1,6 +1,6 @@
-import createUserNotificationService from "../createUserNotification.service.js";
+import {createUserNotificationService} from "../createUserNotification.service.js";
 
-import sendPushNotificationToUserService from "../sendPushNotificationToUser.service.js";
+import {sendPushNotificationToUserService} from "../sendPushNotificationToUser.service.js";
 
 import createModerationEmailService from "./createModerationEmail.service.js";
 
