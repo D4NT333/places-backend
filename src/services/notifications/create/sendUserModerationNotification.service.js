@@ -2,8 +2,6 @@ import {createUserNotificationService} from "../createUserNotification.service.j
 
 import {sendPushNotificationToUserService} from "../sendPushNotificationToUser.service.js";
 
-import createModerationEmailService from "./createModerationEmail.service.js";
-
 function normalizeWarningCount(value) {
   const parsedValue =
     Number(value);
@@ -42,15 +40,6 @@ function getUserModerationNotification({
 
       body:
         "Tu cuenta fue bloqueada permanentemente por incumplir las normas de Lsearch.",
-
-      emailSubject:
-        "Tu cuenta de Lsearch fue bloqueada",
-
-      emailTitle:
-        "Bloqueo permanente de cuenta",
-
-      shouldSendEmail:
-        true,
     };
   }
 
@@ -214,36 +203,6 @@ export default async function sendUserModerationNotificationService({
     );
   }
 
-  let emailResult = null;
-
-  if (
-    notification.shouldSendEmail
-  ) {
-    try {
-      emailResult =
-        await createModerationEmailService({
-          uid:
-            cleanUid,
-
-          subject:
-            notification.emailSubject,
-
-          title:
-            notification.emailTitle,
-
-          reasonLabel,
-
-          message,
-
-          moderationId,
-        });
-    } catch (error) {
-      console.error(
-        "No se pudo preparar el correo de bloqueo:",
-        error,
-      );
-    }
-  }
 
   return {
     notification:
@@ -252,8 +211,5 @@ export default async function sendUserModerationNotificationService({
 
     push:
       pushResult,
-
-    email:
-      emailResult,
   };
 }

@@ -511,64 +511,85 @@ export default async function resolveAdminUserReportService({
    */
   let notificationResult = null;
 
-  if (
-    transactionResult.warningApplied
-  ) {
-    try {
-      notificationResult =
-        await sendUserModerationNotificationService({
-          uid:
-            cleanUserId,
+if (
+  transactionResult.warningApplied
+) {
+  console.log(
+    "Enviando notificación por reporte validado:",
+    {
+      uid:
+        cleanUserId,
 
-          moderationId:
-            transactionResult.moderationId,
+      moderationId:
+        transactionResult.moderationId,
 
-          moderationType:
-            transactionResult.resultingStatus ===
-            USER_STATUSES.BANNED
-              ? MODERATION_TYPES.PERMANENT_BAN
-              : MODERATION_TYPES.WARNING,
+      moderationType:
+        transactionResult.resultingStatus ===
+        USER_STATUSES.BANNED
+          ? MODERATION_TYPES.PERMANENT_BAN
+          : MODERATION_TYPES.WARNING,
 
-          warningCount:
-            transactionResult.warningCount,
+      warningCount:
+        transactionResult.warningCount,
 
-          reason:
-            transactionResult.reason ||
-            "validated_report",
+      reportId:
+        cleanReportId,
+    },
+  );
 
-          reasonLabel:
-            transactionResult.reasonLabel ||
-            "Reporte validado",
+  notificationResult =
+    await sendUserModerationNotificationService({
+      uid:
+        cleanUserId,
 
-          message:
-            cleanResolutionNote,
+      moderationId:
+        transactionResult.moderationId,
 
-          source:
-            MODERATION_SOURCES
-              .VALIDATED_REPORT,
+      moderationType:
+        transactionResult.resultingStatus ===
+        USER_STATUSES.BANNED
+          ? MODERATION_TYPES.PERMANENT_BAN
+          : MODERATION_TYPES.WARNING,
 
-          reportId:
-            cleanReportId,
-        });
-    } catch (error) {
-      console.error(
-        "Error enviando notificación por reporte validado:",
-        error,
-      );
-    }
-  }
+      warningCount:
+        transactionResult.warningCount,
 
-  return {
-    ok: true,
+      reason:
+        transactionResult.reason ||
+        "validated_report",
 
-    userId:
-      cleanUserId,
+      reasonLabel:
+        transactionResult.reasonLabel ||
+        "Reporte validado",
 
-    maxWarnings:
-      MAX_WARNINGS,
+      message:
+        cleanResolutionNote,
 
-    ...transactionResult,
+      source:
+        MODERATION_SOURCES
+          .VALIDATED_REPORT,
 
+      reportId:
+        cleanReportId,
+    });
+
+  console.log(
+    "Resultado notificación por reporte:",
     notificationResult,
-  };
+  );
+}
+
+return {
+  ok: true,
+
+  userId:
+    cleanUserId,
+
+  maxWarnings:
+    MAX_WARNINGS,
+
+  ...transactionResult,
+
+  notificationResult,
+};
 }
