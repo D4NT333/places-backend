@@ -152,13 +152,22 @@ export default async function toggleFavoritePlaceService({ uid, placeId }) {
 
     const place = placeDoc.data();
 
-    if (place.deletedAt) {
-      throw createHttpError("Este lugar ya no está disponible.", 404);
-    }
+    const moderationStatus =
+  cleanText(place.status).toLowerCase();
 
-    if (cleanText(place.status) !== "published") {
-      throw createHttpError("Este lugar no está publicado.", 400);
-    }
+const activityStatus =
+  cleanText(place.activityStatus).toLowerCase();
+
+if (
+  place.deletedAt ||
+  moderationStatus === "hidden" ||
+  activityStatus === "inactive"
+) {
+  throw createHttpError(
+    "Este lugar ya no está disponible.",
+    404,
+  );
+}
 
     const currentSavesCount = Number(place?.metrics?.savesCount) || 0;
 

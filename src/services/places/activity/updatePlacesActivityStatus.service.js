@@ -343,16 +343,20 @@ export default async function updatePlacesActivityStatusService() {
 
   while (true) {
     let query = db
-      .collection(PLACES_COLLECTION)
-      .where(
-        "status",
-        "==",
-        "published",
-      )
-      .orderBy(
-        FieldPath.documentId(),
-      )
-      .limit(PAGE_SIZE);
+  .collection(PLACES_COLLECTION)
+  .where(
+    "status",
+    "in",
+    [
+      "published",
+      "pending",
+      "warned",
+    ],
+  )
+  .orderBy(
+    FieldPath.documentId(),
+  )
+  .limit(PAGE_SIZE);
 
     if (lastDocument) {
       query = query.startAfter(

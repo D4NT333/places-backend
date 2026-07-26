@@ -33,17 +33,24 @@ function normalizeCount(value) {
 }
 
 function assertPlaceCanReceiveLikes(place) {
-  if (place.deletedAt) {
+  const moderationStatus =
+    typeof place.status === "string"
+      ? place.status.trim().toLowerCase()
+      : "";
+
+  const activityStatus =
+    typeof place.activityStatus === "string"
+      ? place.activityStatus.trim().toLowerCase()
+      : "";
+
+  if (
+    place.deletedAt ||
+    moderationStatus === "hidden" ||
+    activityStatus === "inactive"
+  ) {
     throw createHttpError(
       "El lugar solicitado no está disponible.",
       404,
-    );
-  }
-
-  if (place.status !== "published") {
-    throw createHttpError(
-      "El lugar solicitado no está publicado.",
-      409,
     );
   }
 }
@@ -165,7 +172,7 @@ export default async function togglePlaceLikeService({
    * si existe, el usuario dio like.
    */
   const userLikeRef = db
-    .collection("users")
+    .collection("user")
     .doc(normalizedUid)
     .collection("likedPlaces")
     .doc(normalizedPlaceId);
