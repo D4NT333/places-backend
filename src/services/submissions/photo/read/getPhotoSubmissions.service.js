@@ -3,6 +3,9 @@ import { db } from "../../../../config/firebase.js";
 const PHOTO_SUBMISSIONS_COLLECTION =
   "photoSubmissions";
 
+const USERS_COLLECTION =
+  "users";
+
 const VALID_STATUSES = [
   "in_review",
   "approved",
@@ -146,6 +149,86 @@ function getFirstPhoto(
   );
 }
 
+async function getUsersByUid(
+  pageDocuments
+) {
+  const userIds = [
+    ...new Set(
+      pageDocuments
+        .map((document) => {
+          const data =
+            document.data() ||
+            {};
+
+          return typeof data.createdBy ===
+            "string"
+            ? data.createdBy.trim()
+            : "";
+        })
+        .filter(Boolean)
+    ),
+  ];
+
+  if (
+    userIds.length === 0
+  ) {
+    return new Map();
+  }
+
+  const userReferences =
+    userIds.map((userId) =>
+      db
+        .collection(
+          USERS_COLLECTION
+        )
+        .doc(userId)
+    );
+
+  const userSnapshots =
+    await db.getAll(
+      ...userReferences
+    );
+
+  const usersByUid =
+    new Map();
+
+  userSnapshots.forEach(
+    (userSnapshot) => {
+      if (
+        !userSnapshot.exists
+      ) {
+        return;
+      }
+
+      const userData =
+        userSnapshot.data() ||
+        {};
+
+      const userId =
+        userData.uid ||
+        userSnapshot.id;
+
+      usersByUid.set(
+        userId,
+        {
+          uid:
+            userId,
+
+          name:
+            userData.name ||
+            "",
+
+          photoURL:
+            userData.photoURL ||
+            "",
+        }
+      );
+    }
+  );
+
+  return usersByUid;
+}
+
 export default async function getPhotoSubmissionsService({
   status = "all",
   limit = DEFAULT_LIMIT,
@@ -269,6 +352,15 @@ export default async function getPhotoSubmissionsService({
         )
       : snapshot.docs;
 
+  /*
+   * Consulta una sola vez los perfiles necesarios
+   * para enriquecer las propuestas con su foto.
+   */
+  const usersByUid =
+    await getUsersByUid(
+      pageDocuments
+    );
+
   const submissions =
     pageDocuments.map(
       (document) => {
@@ -303,6 +395,18 @@ export default async function getPhotoSubmissionsService({
             ?.path ||
           "";
 
+        const createdBy =
+          typeof data.createdBy ===
+            "string"
+            ? data.createdBy.trim()
+            : "";
+
+        const user =
+          usersByUid.get(
+            createdBy
+          ) ||
+          null;
+
         return {
           id:
             document.id,
@@ -319,13 +423,16 @@ export default async function getPhotoSubmissionsService({
             data.placeName ||
             "Lugar sin nombre",
 
-          createdBy:
-            data.createdBy ||
-            "",
+          createdBy,
 
           createdByName:
             data.createdByName ||
+            user?.name ||
             "Usuario",
+
+          userPhotoUrl:
+            user?.photoURL ||
+            "",
 
           status:
             data.status ||

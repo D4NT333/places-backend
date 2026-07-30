@@ -264,6 +264,11 @@ const approachLabels = normalizeDisplayLabels(
     createdAt: formatTimestamp(submission.createdAt),
     updatedAt: formatTimestamp(submission.updatedAt),
 
+    returnedAt: formatTimestamp(submission.returnedAt),
+    resubmittedAt: formatTimestamp(submission.resubmittedAt),
+    rejectedAt: formatTimestamp(submission.rejectedAt),
+    approvedAt: formatTimestamp(submission.approvedAt),
+
     userId: submission.createdBy || null,
     userName: mapUserDisplayName(user),
     userPhotoUrl: mapUserPhotoUrl(user),

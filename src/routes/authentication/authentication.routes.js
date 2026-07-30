@@ -5,7 +5,13 @@ import checkRegisterAvailabilityController from "../../controllers/authenticatio
 import getMobileMeController from "../../controllers/authentication/getMobileMe.controller.js";
 import deleteMyAccountController from "../../controllers/authentication/deleteMyAccount.controller.js";
 
+import getAdminsController from "../../controllers/authentication/getAdmins.controller.js";
+import updateAdminRoleController from "../../controllers/authentication/update/updateAdminRole.controller.js"
+import updateAdminStatusController from "../../controllers/authentication/update/updateAdminStatus.controller.js"
+
 import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
+
+import verifySuperAdmin from "../../middlewares/admins/verifySuperAdmin.js";
 
 import {registerEmailUserController} from "../../controllers/authentication/registerEmailUser.controller.js";
 
@@ -28,4 +34,17 @@ router.get("/me", verifyFirebaseToken, getMobileMeController);
 
 router.delete("/me", verifyFirebaseToken, deleteMyAccountController);
 
+
+router.get("/admins",verifyFirebaseToken,verifySuperAdmin,getAdminsController);
+
+router.patch("/admins/:adminUid/role",verifyFirebaseToken,verifySuperAdmin,updateAdminRoleController);
+
+router.patch("/admins/:adminUid/status",verifyFirebaseToken,verifySuperAdmin,updateAdminStatusController);
+
 export default router;
+
+
+
+
+
+

@@ -23,6 +23,8 @@ import resolveAdminPlaceReportController from "../../controllers/places/resolveA
 import moderateAdminPlaceController from "../../controllers/places/moderateAdminPlace.controller.js"
 
 import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
+import verifySuperAdmin from "../../middlewares/admins/verifySuperAdmin.js";
+import verifyActiveAdmin from "../../middlewares/admins/verifyActiveAdmin.js";
 
 import registerPlaceViewController from "../../controllers/places/interactions/registerPlaceView.controller.js";
 import togglePlaceLikeController from "../../controllers/places/interactions/togglePlaceLike.controller.js";
@@ -36,16 +38,17 @@ const router = Router();
  * @desc Descubre lugares usando un hex H3
  */
 
-router.post("/admin/google-places/discover-by-h3",discoverPlacesByH3Controller);
-router.get("/admin/create-catalog", getCreateCatalogController);
+router.post("/admin/google-places/discover-by-h3", verifyFirebaseToken, verifySuperAdmin, discoverPlacesByH3Controller);
 
-router.get("/admin/google-places/candidates",listGooglePlaceCandidatesController);
+router.get("/admin/create-catalog", verifyFirebaseToken, verifyActiveAdmin, getCreateCatalogController);
 
-router.get("/admin/google-places/candidates-summary",getGoogleCandidatesSummaryController);
+router.get("/admin/google-places/candidates", verifyFirebaseToken, verifyActiveAdmin, listGooglePlaceCandidatesController);
 
-router.get("/admin/google-places/candidates/:googlePlaceId/details",getGooglePlaceCandidateDetailsController);
+router.get("/admin/google-places/candidates-summary", verifyFirebaseToken, verifyActiveAdmin, getGoogleCandidatesSummaryController);
 
-router.post("/admin/google-places/register-from-candidate",verifyFirebaseToken,registerPlaceFromCandidateController);
+router.get("/admin/google-places/candidates/:googlePlaceId/details", verifyFirebaseToken, verifyActiveAdmin, getGooglePlaceCandidateDetailsController);
+
+router.post("/admin/google-places/register-from-candidate", verifyFirebaseToken, verifyActiveAdmin, registerPlaceFromCandidateController);
 
 router.get("/feed", getPlacesFeedController);
 
