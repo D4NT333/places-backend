@@ -435,6 +435,58 @@ function buildMetrics() {
   };
 }
 
+function getCurrentWeekId(
+  date = new Date(),
+) {
+  const currentDate =
+    new Date(
+      Date.UTC(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate(),
+      ),
+    );
+
+  const currentDay =
+    currentDate.getUTCDay();
+
+  const daysSinceMonday =
+    currentDay === 0
+      ? 6
+      : currentDay - 1;
+
+  currentDate.setUTCDate(
+    currentDate.getUTCDate() -
+      daysSinceMonday,
+  );
+
+  return currentDate
+    .toISOString()
+    .slice(0, 10);
+}
+
+function buildActivityCheckpoint() {
+  return {
+    weekId:
+      getCurrentWeekId(),
+
+    views:
+      0,
+
+    likesAdded:
+      0,
+
+    reviewsCreated:
+      0,
+
+    validSessions:
+      0,
+
+    communityConfirmationUserIds:
+      [],
+  };
+}
+
 function buildTrend() {
   return {
     score: 0,
@@ -720,6 +772,9 @@ export default async function approvePlaceSubmissionService({
 
           activityStatus:
             "active",
+
+            activityCheckpoint:
+            buildActivityCheckpoint(),
 
           source:
             "mobile",

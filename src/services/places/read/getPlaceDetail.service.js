@@ -2,6 +2,7 @@ import { db } from "../../../config/firebase.js";
 
 const SUBTAGS_COLLECTION = "subtag";
 const TAGS_COLLECTION = "tag";
+const REQUIRED_COMMUNITY_CONFIRMATIONS = 5;
 
 function cleanText(value) {
   return typeof value === "string"
@@ -21,6 +22,22 @@ function normalizeStringArray(value) {
     )
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function normalizeUidArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      value
+        .map((item) =>
+          cleanText(item)
+        )
+        .filter(Boolean)
+    ),
+  ];
 }
 
 function toNumberOrNull(value) {
@@ -257,16 +274,6 @@ function normalizeReviewItem(doc) {
 
     placeId:
       cleanText(review.placeId),
-
-      originType:
-  cleanText(
-    place?.origin?.type
-  ),
-
-source:
-  cleanText(
-    place?.source
-  ),
 
     userId:
       cleanText(review.userId),
@@ -847,6 +854,43 @@ export default async function getPlaceDetailService({
  const place =
   placeDoc.data();
 
+const activityStatus =
+  cleanText(
+    place.activityStatus
+  ).toLowerCase();
+
+const activityCheckpoint =
+  place.activityCheckpoint &&
+  typeof place.activityCheckpoint ===
+    "object"
+    ? place.activityCheckpoint
+    : {};
+
+const activityCheckpointWeekId =
+  cleanText(
+    activityCheckpoint.weekId
+  );
+
+const communityConfirmationUserIds =
+  normalizeUidArray(
+    activityCheckpoint
+      .communityConfirmationUserIds
+  );
+
+const cleanCurrentUid =
+  cleanText(uid);
+
+const hasConfirmedActivity =
+  Boolean(
+    cleanCurrentUid &&
+    communityConfirmationUserIds.includes(
+      cleanCurrentUid
+    )
+  );
+
+const communityConfirmationsCount =
+  communityConfirmationUserIds.length;
+
 if (place.deletedAt) {
   const error = new Error(
     "El lugar ya no está disponible."
@@ -984,6 +1028,40 @@ if (
         cleanText(
           place.placeId
         ) || placeDoc.id,
+
+
+        activityStatus,
+
+activityConfirmation: {
+  checkpointWeekId:
+    activityCheckpointWeekId,
+
+  hasConfirmed:
+    hasConfirmedActivity,
+
+  confirmationsCount:
+    communityConfirmationsCount,
+
+  requiredConfirmations:
+    REQUIRED_COMMUNITY_CONFIRMATIONS,
+
+  canConfirm:
+    activityStatus ===
+      "pending" &&
+    !hasConfirmedActivity &&
+    communityConfirmationsCount <
+      REQUIRED_COMMUNITY_CONFIRMATIONS,
+},
+
+originType:
+  cleanText(
+    place?.origin?.type
+  ),
+
+source:
+  cleanText(
+    place?.source
+  ),
 
       name:
         cleanText(place.name),
