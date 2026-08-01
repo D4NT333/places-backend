@@ -8,6 +8,10 @@ const USER_STATUS = {
   BLOCKED: "blocked",
 };
 
+const DATABASE_USER_STATUS = {
+  BANNED: "banned",
+};
+
 const ALLOWED_STATUS_FILTERS = new Set([
   USER_STATUS.ALL,
   USER_STATUS.ACTIVE,
@@ -46,20 +50,34 @@ function getInitials(name = "", email = "") {
   const cleanEmail = email?.trim();
 
   if (cleanEmail) {
-    return cleanEmail.replace(/@.*/, "").slice(0, 2).toUpperCase();
+    return cleanEmail
+      .replace(/@.*/, "")
+      .slice(0, 2)
+      .toUpperCase();
   }
 
   return "US";
 }
 
 function normalizeUserStatus(status) {
+  const normalizedStatus = String(status || "")
+    .trim()
+    .toLowerCase();
+
   if (
-    status === USER_STATUS.ACTIVE ||
-    status === USER_STATUS.UNDER_OBSERVATION ||
-    status === USER_STATUS.WARNED ||
-    status === USER_STATUS.BLOCKED
+    normalizedStatus === "banned" ||
+    normalizedStatus === "blocked" ||
+    normalizedStatus === "permanently_banned"
   ) {
-    return status;
+    return USER_STATUS.BLOCKED;
+  }
+
+  if (normalizedStatus === USER_STATUS.WARNED) {
+    return USER_STATUS.WARNED;
+  }
+
+  if (normalizedStatus === USER_STATUS.UNDER_OBSERVATION) {
+    return USER_STATUS.UNDER_OBSERVATION;
   }
 
   return USER_STATUS.ACTIVE;
@@ -82,7 +100,10 @@ function normalizeUser(doc) {
     photoURL: data.photoURL || null,
     provider: data.provider || null,
 
-    profile: data.profile || data.profileLabel || "Sin perfil",
+    profile:
+      data.profile ||
+      data.profileLabel ||
+      "Sin perfil",
 
     status: normalizeUserStatus(data.status),
     emailVerified: Boolean(data.emailVerified),
@@ -92,8 +113,11 @@ function normalizeUser(doc) {
     lastLoginAt: serializeDate(data.lastLoginAt),
 
     activity: {
-      contributionsCount: data.contributionsCount || 0,
-      reportsCount: data.reportsCount || 0,
+      contributionsCount:
+        data.contributionsCount || 0,
+
+      reportsCount:
+        data.reportsCount || 0,
     },
   };
 }
@@ -103,24 +127,41 @@ export default async function getAdminUsersService({
   cursor = null,
   status = USER_STATUS.ALL,
 }) {
-  const safeLimit = Math.min(Number(limit) || 15, 30);
+  const safeLimit = Math.min(
+    Number(limit) || 15,
+    30,
+  );
 
-  const safeStatus = ALLOWED_STATUS_FILTERS.has(status)
-    ? status
-    : USER_STATUS.ALL;
+  const safeStatus =
+    ALLOWED_STATUS_FILTERS.has(status)
+      ? status
+      : USER_STATUS.ALL;
 
   let query = db
     .collection("user")
     .orderBy("createdAt", "desc");
 
-  if (safeStatus !== USER_STATUS.ALL) {
-    query = query.where("status", "==", safeStatus);
+  if (safeStatus === USER_STATUS.BLOCKED) {
+    query = query.where(
+      "status",
+      "==",
+      DATABASE_USER_STATUS.BANNED,
+    );
+  } else if (safeStatus !== USER_STATUS.ALL) {
+    query = query.where(
+      "status",
+      "==",
+      safeStatus,
+    );
   }
 
   query = query.limit(safeLimit + 1);
 
   if (cursor) {
-    const cursorDoc = await db.collection("user").doc(cursor).get();
+    const cursorDoc = await db
+      .collection("user")
+      .doc(cursor)
+      .get();
 
     if (cursorDoc.exists) {
       query = query.startAfter(cursorDoc);
@@ -129,15 +170,24 @@ export default async function getAdminUsersService({
 
   const snapshot = await query.get();
 
-  const docs = snapshot.docs.slice(0, safeLimit);
-  const extraDoc = snapshot.docs[safeLimit];
+  const docs = snapshot.docs.slice(
+    0,
+    safeLimit,
+  );
+
+  const extraDoc =
+    snapshot.docs[safeLimit];
 
   return {
     users: docs.map(normalizeUser),
     count: docs.length,
     status: safeStatus,
     hasMore: Boolean(extraDoc),
-    nextCursor: extraDoc ? docs[docs.length - 1]?.id || null : null,
+
+    nextCursor: extraDoc
+      ? docs[docs.length - 1]?.id || null
+      : null,
+
     limit: safeLimit,
   };
 }

@@ -95,29 +95,143 @@ function normalizeLocation(location) {
   };
 }
 
-function normalizeGooglePhotoReferences(photos = []) {
-  if (!Array.isArray(photos)) return [];
+function normalizeGooglePhotoReferences(
+  photos = []
+) {
+  if (!Array.isArray(photos)) {
+    return [];
+  }
 
   return photos
-    .filter((photo) => photo?.name || photo?.photoReference || photo?.reference)
-    .map((photo, index) => ({
-      source: "google",
-      reference: photo.name || photo.photoReference || photo.reference,
-      widthPx: photo.widthPx ?? null,
-      heightPx: photo.heightPx ?? null,
-      order: index,
-    }));
+    .filter(
+      (photo) =>
+        photo?.name ||
+        photo?.photoReference ||
+        photo?.reference
+    )
+    .map((photo, index) => {
+      const widthPx =
+        Number(photo.widthPx);
+
+      const heightPx =
+        Number(photo.heightPx);
+
+      return {
+        source: "google",
+
+        reference:
+          photo.name ||
+          photo.photoReference ||
+          photo.reference,
+
+        widthPx:
+          Number.isFinite(widthPx)
+            ? widthPx
+            : null,
+
+        heightPx:
+          Number.isFinite(heightPx)
+            ? heightPx
+            : null,
+
+        order: index,
+      };
+    });
 }
 
-function getMainPhoto(photos = []) {
-  if (!Array.isArray(photos) || photos.length === 0) return null;
+function getMainPhoto(
+  photos = []
+) {
+  if (
+    !Array.isArray(photos) ||
+    photos.length === 0
+  ) {
+    return null;
+  }
 
-  const firstPhoto = photos[0];
+  const eligiblePhotos =
+    photos.filter((photo) => {
+      const width =
+        Number(photo.widthPx) || 0;
+
+      const height =
+        Number(photo.heightPx) || 0;
+
+      return (
+        width >= 1080 &&
+        height >= 720
+      );
+    });
+
+  /*
+   * Preferimos únicamente fotos que cumplan
+   * la resolución mínima.
+   *
+   * Si ninguna cumple, conservamos la primera
+   * para no romper lugares sin fotos grandes.
+   */
+  if (eligiblePhotos.length === 0) {
+    return {
+      ...photos[0],
+    };
+  }
+
+  let selectedPhoto =
+    eligiblePhotos[0];
+
+  let selectedResolution =
+    (
+      Number(
+        selectedPhoto.widthPx
+      ) || 0
+    ) *
+    (
+      Number(
+        selectedPhoto.heightPx
+      ) || 0
+    );
+
+  for (
+    let index = 1;
+    index < eligiblePhotos.length;
+    index += 1
+  ) {
+    const currentPhoto =
+      eligiblePhotos[index];
+
+    const currentResolution =
+      (
+        Number(
+          currentPhoto.widthPx
+        ) || 0
+      ) *
+      (
+        Number(
+          currentPhoto.heightPx
+        ) || 0
+      );
+
+    /*
+     * Solo reemplazamos si la resolución
+     * es estrictamente mayor.
+     *
+     * En empate no reemplazamos, por lo que
+     * se conserva la primera fotografía.
+     */
+    if (
+      currentResolution >
+      selectedResolution
+    ) {
+      selectedPhoto =
+        currentPhoto;
+
+      selectedResolution =
+        currentResolution;
+    }
+  }
 
   return {
-    source: firstPhoto.source || "google",
-    reference: firstPhoto.reference || null,
-    order: firstPhoto.order ?? 0,
+    ...selectedPhoto,
   };
 }
 

@@ -20,17 +20,188 @@ function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+const GOOGLE_FEED_PHOTO_MAX_WIDTH = 1080;
+const GOOGLE_THUMBNAIL_MAX_WIDTH = 240;
+
+function getPublicApiUrl() {
+  return cleanText(
+    process.env.PUBLIC_API_URL,
+  ).replace(
+    /\/+$/,
+    "",
+  );
+}
+
+function buildGooglePhotoProxyUrl({
+  reference,
+  maxWidthPx,
+}) {
+  const cleanReference =
+    cleanText(reference);
+
+  const publicApiUrl =
+    getPublicApiUrl();
+
+  if (
+    !cleanReference ||
+    !publicApiUrl
+  ) {
+    return "";
+  }
+
+  return (
+    `${publicApiUrl}/api/places/feed-photo/google` +
+    `?reference=${encodeURIComponent(
+      cleanReference,
+    )}` +
+    `&maxWidthPx=${maxWidthPx}`
+  );
+}
+
 function normalizeMainPhoto(mainPhoto) {
-  if (!mainPhoto || typeof mainPhoto !== "object") {
+  if (
+    !mainPhoto ||
+    typeof mainPhoto !== "object"
+  ) {
     return null;
   }
 
-  return {
-    source: cleanText(mainPhoto.source),
-    reference: cleanText(mainPhoto.reference),
-    order: Number.isFinite(Number(mainPhoto.order))
+  const source =
+    cleanText(mainPhoto.source);
+
+  const order =
+    Number.isFinite(
+      Number(mainPhoto.order),
+    )
       ? Number(mainPhoto.order)
-      : 0,
+      : 0;
+
+  /*
+   * Lugar proveniente de Google.
+   *
+   * Una sola referencia produce una URL medium
+   * y otra thumbnail mediante nuestro backend.
+   */
+  if (
+    source === "google" &&
+    cleanText(mainPhoto.reference)
+  ) {
+    const reference =
+      cleanText(mainPhoto.reference);
+
+    const mediumUrl =
+      buildGooglePhotoProxyUrl({
+        reference,
+        maxWidthPx:
+          GOOGLE_FEED_PHOTO_MAX_WIDTH,
+      });
+
+    const thumbnailUrl =
+      buildGooglePhotoProxyUrl({
+        reference,
+        maxWidthPx:
+          GOOGLE_THUMBNAIL_MAX_WIDTH,
+      });
+
+    return {
+      source,
+      reference,
+      order,
+
+      widthPx:
+        Number.isFinite(
+          Number(mainPhoto.widthPx),
+        )
+          ? Number(mainPhoto.widthPx)
+          : null,
+
+      heightPx:
+        Number.isFinite(
+          Number(mainPhoto.heightPx),
+        )
+          ? Number(mainPhoto.heightPx)
+          : null,
+
+      /*
+       * url es la variante por defecto del feed.
+       */
+      url:
+        mediumUrl,
+
+      mediumUrl,
+      thumbnailUrl,
+    };
+  }
+
+  /*
+   * Lugar proveniente de una submission.
+   *
+   * Sus variantes ya viven en Firebase Storage.
+   */
+  const mediumUrl =
+    cleanText(
+      mainPhoto?.medium?.url ||
+      mainPhoto?.mediumUrl ||
+      mainPhoto?.url,
+    );
+
+  const thumbnailUrl =
+    cleanText(
+      mainPhoto?.thumbnail?.url ||
+      mainPhoto?.thumbnailUrl,
+    );
+
+  return {
+    source:
+      source || "user",
+
+    order,
+
+    photoId:
+      cleanText(mainPhoto.photoId),
+
+    url:
+      mediumUrl ||
+      thumbnailUrl ||
+      "",
+
+    mediumUrl:
+      mediumUrl ||
+      "",
+
+    thumbnailUrl:
+      thumbnailUrl ||
+      "",
+
+    widthPx:
+      Number.isFinite(
+        Number(
+          mainPhoto?.medium?.width ??
+          mainPhoto?.medium?.widthPx ??
+          mainPhoto?.widthPx,
+        ),
+      )
+        ? Number(
+            mainPhoto?.medium?.width ??
+            mainPhoto?.medium?.widthPx ??
+            mainPhoto?.widthPx,
+          )
+        : null,
+
+    heightPx:
+      Number.isFinite(
+        Number(
+          mainPhoto?.medium?.height ??
+          mainPhoto?.medium?.heightPx ??
+          mainPhoto?.heightPx,
+        ),
+      )
+        ? Number(
+            mainPhoto?.medium?.height ??
+            mainPhoto?.medium?.heightPx ??
+            mainPhoto?.heightPx,
+          )
+        : null,
   };
 }
 

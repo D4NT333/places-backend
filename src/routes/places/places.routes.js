@@ -18,9 +18,10 @@ import getAdminPlaceReviewDetailController from "../../controllers/places/getAdm
 import updateAdminPlaceReviewVisibilityController from "../../controllers/places/updateAdminPlaceReviewVisibility.controller.js";
 import getAdminPlaceLsearchGalleryController from "../../controllers/places/getAdminPlaceLsearchGallery.controller.js";
 import getAdminPlaceAnalyticsController from "../../controllers/places/getAdminPlaceAnalytics.controller.js";
+import getGoogleFeedPhotoController from "../../controllers/places/getGoogleFeedPhoto.controller.js";
 
-import resolveAdminPlaceReportController from "../../controllers/places/resolveAdminPlaceReport.controller.js"
-import moderateAdminPlaceController from "../../controllers/places/moderateAdminPlace.controller.js"
+import resolveAdminPlaceReportController from "../../controllers/places/resolveAdminPlaceReport.controller.js";
+import moderateAdminPlaceController from "../../controllers/places/moderateAdminPlace.controller.js";
 
 import verifyFirebaseToken from "../../middlewares/submissions/verifyFirebaseToken.js";
 import verifySuperAdmin from "../../middlewares/admins/verifySuperAdmin.js";
@@ -53,6 +54,8 @@ router.post("/admin/google-places/register-from-candidate", verifyFirebaseToken,
 router.get("/feed", getPlacesFeedController);
 
 router.get("/photos/google", getGooglePlacePhotoController);
+
+router.get("/feed-photo/google",getGoogleFeedPhotoController);
 
 router.get("/:placeId/detail", verifyFirebaseToken, getPlaceDetailController);
 
@@ -89,6 +92,9 @@ router.patch("/:placeId/dwell-sessions/:sessionId/close",verifyFirebaseToken,clo
 router.patch("/admin/:placeId/reports/:reportId/resolve",verifyFirebaseToken,resolveAdminPlaceReportController);
 
 router.patch("/admin/:placeId/moderation",verifyFirebaseToken,moderateAdminPlaceController);
+
+
+
 
 export default router;  
 
