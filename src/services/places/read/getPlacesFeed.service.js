@@ -358,19 +358,28 @@ let query = db
       "published",
       "in_review",
       "warned",
-    ]
+    ],
+  )
+  .where(
+    "activityStatus",
+    "in",
+    [
+      "active",
+      "low_activity",
+      "pending",
+    ],
   )
   .where(
     "deletedAt",
     "==",
-    null
+    null,
   )
   .orderBy(
     "updatedAt",
-    "desc"
+    "desc",
   )
   .limit(
-    safeLimit + 1
+    safeLimit + 1,
   );
 
   if (cursor) {

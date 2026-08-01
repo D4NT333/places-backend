@@ -258,6 +258,16 @@ function normalizeReviewItem(doc) {
     placeId:
       cleanText(review.placeId),
 
+      originType:
+  cleanText(
+    place?.origin?.type
+  ),
+
+source:
+  cleanText(
+    place?.source
+  ),
+
     userId:
       cleanText(review.userId),
 
