@@ -20,6 +20,10 @@ import getAdminPlaceLsearchGalleryController from "../../controllers/places/getA
 import getAdminPlaceAnalyticsController from "../../controllers/places/getAdminPlaceAnalytics.controller.js";
 import getGoogleFeedPhotoController from "../../controllers/places/getGoogleFeedPhoto.controller.js";
 
+import getPlaceGalleryController from "../../controllers/places/getPlaceGallery.controller.js";
+import getGoogleGalleryPhotoController from "../../controllers/places/getGoogleGalleryPhoto.controller.js";
+
+
 import resolveAdminPlaceReportController from "../../controllers/places/resolveAdminPlaceReport.controller.js";
 import moderateAdminPlaceController from "../../controllers/places/moderateAdminPlace.controller.js";
 
@@ -77,6 +81,10 @@ router.get("/admin/:placeId/submissions",verifyFirebaseToken,getAdminPlaceSubmis
 router.patch("/admin/:placeId/reviews/:reviewId/visibility",verifyFirebaseToken,updateAdminPlaceReviewVisibilityController);
 
 router.get("/admin/:placeId/lsearch-gallery",verifyFirebaseToken,  getAdminPlaceLsearchGalleryController);
+
+router.get("/gallery-photo/google",getGoogleGalleryPhotoController);
+
+router.get("/:placeId/gallery",verifyFirebaseToken,getPlaceGalleryController);
 
 router.get("/admin/:placeId/analytics",verifyFirebaseToken,getAdminPlaceAnalyticsController);
 
