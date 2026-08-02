@@ -286,8 +286,15 @@ const tagLabel =
       ) ||
       "Lugar sin nombre",
 
-   tagId,
-tagLabel,
+    tagId:
+      cleanText(place.tagId) ||
+      cleanText(favorite.tagId),
+
+    tagLabel:
+      cleanText(place.tagLabel) ||
+      cleanText(
+        favorite.tagLabel,
+      ),
 
     subtags,
 
