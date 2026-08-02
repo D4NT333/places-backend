@@ -1,5 +1,12 @@
 import { db } from "../../../config/firebase.js";
 
+const SUBTAGS_COLLECTION = "subtag";
+const TAGS_COLLECTION = "tag";
+
+const GOOGLE_FAVORITE_MEDIUM_WIDTH = 720;
+const GOOGLE_FAVORITE_THUMBNAIL_WIDTH = 320;
+const FAVORITES_MAX_SUBTAGS = 2;
+
 function createHttpError(
   message,
   statusCode = 400
@@ -8,6 +15,38 @@ function createHttpError(
   error.statusCode = statusCode;
 
   return error;
+}
+
+function getPublicApiUrl() {
+  return cleanText(
+    process.env.PUBLIC_API_URL,
+  ).replace(/\/+$/, "");
+}
+
+function buildGooglePhotoProxyUrl({
+  reference,
+  maxWidthPx,
+}) {
+  const cleanReference =
+    cleanText(reference);
+
+  const publicApiUrl =
+    getPublicApiUrl();
+
+  if (
+    !cleanReference ||
+    !publicApiUrl
+  ) {
+    return "";
+  }
+
+  return (
+    `${publicApiUrl}/api/places/feed-photo/google` +
+    `?reference=${encodeURIComponent(
+      cleanReference,
+    )}` +
+    `&maxWidthPx=${maxWidthPx}`
+  );
 }
 
 function cleanText(value) {
@@ -40,29 +79,149 @@ function normalizeMainPhoto(mainPhoto) {
     return null;
   }
 
+  const source =
+    cleanText(mainPhoto.source);
+
+  const order =
+    Number.isFinite(
+      Number(mainPhoto.order),
+    )
+      ? Number(mainPhoto.order)
+      : 0;
+
+  /*
+   * Lugar proveniente de Google.
+   *
+   * La referencia se convierte en URLs
+   * mediante el mismo proxy usado por Home.
+   */
+  if (
+    source === "google" &&
+    cleanText(mainPhoto.reference)
+  ) {
+    const reference =
+      cleanText(mainPhoto.reference);
+
+    const mediumUrl =
+      buildGooglePhotoProxyUrl({
+        reference,
+        maxWidthPx:
+          GOOGLE_FAVORITE_MEDIUM_WIDTH,
+      });
+
+    const thumbnailUrl =
+      buildGooglePhotoProxyUrl({
+        reference,
+        maxWidthPx:
+          GOOGLE_FAVORITE_THUMBNAIL_WIDTH,
+      });
+
+    return {
+      source,
+      reference,
+      order,
+
+      url:
+        mediumUrl ||
+        thumbnailUrl ||
+        "",
+
+      mediumUrl:
+        mediumUrl || "",
+
+      thumbnailUrl:
+        thumbnailUrl || "",
+
+      widthPx:
+        Number.isFinite(
+          Number(mainPhoto.widthPx),
+        )
+          ? Number(mainPhoto.widthPx)
+          : null,
+
+      heightPx:
+        Number.isFinite(
+          Number(mainPhoto.heightPx),
+        )
+          ? Number(mainPhoto.heightPx)
+          : null,
+    };
+  }
+
+  /*
+   * Lugar proveniente de una submission.
+   *
+   * La mainPhoto ya contiene las variantes
+   * medium y posiblemente thumbnail.
+   */
+  const mediumUrl =
+    cleanText(
+      mainPhoto?.medium?.url ||
+        mainPhoto?.mediumUrl ||
+        mainPhoto?.url,
+    );
+
+  const thumbnailUrl =
+    cleanText(
+      mainPhoto?.thumbnail?.url ||
+        mainPhoto?.thumbnailUrl,
+    );
+
   return {
     source:
-      cleanText(
-        mainPhoto.source
-      ),
+      source || "user",
 
-    reference:
-      cleanText(
-        mainPhoto.reference
-      ),
+    photoId:
+      cleanText(mainPhoto.photoId),
 
-    order:
+    order,
+
+    url:
+      mediumUrl ||
+      thumbnailUrl ||
+      "",
+
+    mediumUrl:
+      mediumUrl || "",
+
+    thumbnailUrl:
+      thumbnailUrl || "",
+
+    widthPx:
       Number.isFinite(
-        Number(mainPhoto.order)
+        Number(
+          mainPhoto?.medium?.width ??
+            mainPhoto?.medium?.widthPx ??
+            mainPhoto?.widthPx,
+        ),
       )
-        ? Number(mainPhoto.order)
-        : 0,
+        ? Number(
+            mainPhoto?.medium?.width ??
+              mainPhoto?.medium?.widthPx ??
+              mainPhoto?.widthPx,
+          )
+        : null,
+
+    heightPx:
+      Number.isFinite(
+        Number(
+          mainPhoto?.medium?.height ??
+            mainPhoto?.medium?.heightPx ??
+            mainPhoto?.heightPx,
+        ),
+      )
+        ? Number(
+            mainPhoto?.medium?.height ??
+              mainPhoto?.medium?.heightPx ??
+              mainPhoto?.heightPx,
+          )
+        : null,
   };
 }
 
-function mapFavoriteDoc(
+async function mapFavoriteDoc(
   favoriteDoc,
-  placeSnapshot
+  placeSnapshot,
 ) {
   const favorite =
     favoriteDoc.data();
@@ -70,90 +229,101 @@ function mapFavoriteDoc(
   const place =
     placeSnapshot.data();
 
+  const placeSubtags =
+    normalizeStringArray(
+      place.subtags,
+    );
+
+  const favoriteSubtags =
+    normalizeStringArray(
+      favorite.subtags,
+    );
+
+  const subtags =
+    await normalizeSubtagsWithLabels(
+      placeSubtags.length > 0
+        ? placeSubtags
+        : favoriteSubtags,
+    );
+
+  const googleRating =
+    Number(
+      place?.googleData?.rating,
+    );
+
+  const averageRating =
+    Number(
+      place?.metrics?.averageRating,
+    );
+
+  const favoriteRating =
+    Number(favorite.rating);
+
+    const tagId =
+  cleanText(place.tagId) ||
+  cleanText(favorite.tagId);
+
+const storedTagLabel =
+  cleanText(place.tagLabel) ||
+  cleanText(favorite.tagLabel);
+
+const tagLabel =
+  storedTagLabel ||
+  await getTagLabelById(tagId);
+
   return {
     id:
       favoriteDoc.id,
 
     placeId:
-      cleanText(
-        place.placeId
-      ) ||
+      cleanText(place.placeId) ||
       placeSnapshot.id,
 
-    /*
-     * Preferimos los datos actuales
-     * del lugar y usamos el favorito
-     * solamente como respaldo.
-     */
     placeName:
+      cleanText(place.name) ||
       cleanText(
-        place.name
+        favorite.placeName,
       ) ||
-      cleanText(
-        favorite.placeName
-      ),
+      "Lugar sin nombre",
 
-    tagId:
-      cleanText(
-        place.tagId
-      ) ||
-      cleanText(
-        favorite.tagId
-      ),
+   tagId,
+tagLabel,
 
-    tagLabel:
-      cleanText(
-        place.tagLabel
-      ) ||
-      cleanText(
-        favorite.tagLabel
-      ),
-
-    subtags:
-      normalizeStringArray(
-        place.subtags
-      ).length > 0
-        ? normalizeStringArray(
-            place.subtags
-          )
-        : normalizeStringArray(
-            favorite.subtags
-          ),
+    subtags,
 
     rating:
       Number.isFinite(
-        Number(
-          place.metrics
-            ?.averageRating
-        )
-      )
-        ? Number(
-            place.metrics
-              ?.averageRating
-          )
+        googleRating,
+      ) &&
+      googleRating > 0
+        ? googleRating
         : Number.isFinite(
-              Number(
-                favorite.rating
+              averageRating,
+            ) &&
+            averageRating > 0
+          ? averageRating
+          : Number.isFinite(
+                favoriteRating,
               )
-            )
-          ? Number(
-              favorite.rating
-            )
-          : 0,
+            ? favoriteRating
+            : 0,
 
     mainPhoto:
       normalizeMainPhoto(
-        place.mainPhoto
+        place.mainPhoto,
       ) ||
       normalizeMainPhoto(
-        favorite.mainPhoto
+        favorite.mainPhoto,
       ),
 
     status:
-      cleanText(
-        place.status
-      ) ||
+      cleanText(place.status) ||
       "published",
+
+    activityStatus:
+      cleanText(
+        place.activityStatus,
+      ),
 
     createdAt:
       favorite.createdAt ||
@@ -166,18 +336,143 @@ function isPlaceVisibleInMobile(place) {
     return false;
   }
 
-  if (
-    cleanText(place.status) ===
-    "hidden"
-  ) {
-    return false;
-  }
+  const moderationStatus =
+    cleanText(
+      place.status,
+    ).toLowerCase();
+
+  const activityStatus =
+    cleanText(
+      place.activityStatus,
+    ).toLowerCase();
 
   if (place.deletedAt) {
     return false;
   }
 
+  if (
+    [
+      "hidden",
+      "blocked",
+      "deleted",
+    ].includes(
+      moderationStatus,
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    activityStatus ===
+    "inactive"
+  ) {
+    return false;
+  }
+
   return true;
+}
+
+async function getTagLabelById(tagId) {
+  const cleanTagId =
+    cleanText(tagId);
+
+  if (!cleanTagId) {
+    return "";
+  }
+
+  try {
+    const tagDoc = await db
+      .collection(TAGS_COLLECTION)
+      .doc(cleanTagId)
+      .get();
+
+    if (!tagDoc.exists) {
+      return cleanTagId;
+    }
+
+    const tag = tagDoc.data();
+
+    return (
+      cleanText(tag.label) ||
+      cleanText(tag.name) ||
+      cleanText(tag.title) ||
+      cleanTagId
+    );
+  } catch (error) {
+    console.error(
+      "Error obteniendo label de tag:",
+      error,
+    );
+
+    return cleanTagId;
+  }
+}
+
+async function getSubtagLabelById(
+  subtagId,
+) {
+  const cleanSubtagId =
+    cleanText(subtagId);
+
+  if (!cleanSubtagId) {
+    return "";
+  }
+
+  try {
+    const subtagDoc = await db
+      .collection(
+        SUBTAGS_COLLECTION,
+      )
+      .doc(cleanSubtagId)
+      .get();
+
+    if (!subtagDoc.exists) {
+      return cleanSubtagId;
+    }
+
+    const subtag =
+      subtagDoc.data();
+
+    return (
+      cleanText(subtag.label) ||
+      cleanText(subtag.name) ||
+      cleanText(subtag.title) ||
+      cleanSubtagId
+    );
+  } catch (error) {
+    console.error(
+      "Error obteniendo label de subtag:",
+      error,
+    );
+
+    return cleanSubtagId;
+  }
+}
+
+async function normalizeSubtagsWithLabels(
+  subtags,
+) {
+  const cleanSubtags =
+    normalizeStringArray(subtags);
+
+  if (!cleanSubtags.length) {
+    return [];
+  }
+
+  const labels =
+    await Promise.all(
+      cleanSubtags.map(
+        getSubtagLabelById,
+      ),
+    );
+
+  return labels
+    .map(cleanText)
+    .filter(Boolean)
+    .slice(
+      0,
+      FAVORITES_MAX_SUBTAGS,
+    );
 }
 
 export default async function listFavoritePlacesService({
@@ -263,47 +558,36 @@ export default async function listFavoritePlacesService({
       )
     );
 
-  const favorites = [];
-
-  favoriteItems.forEach(
-    (item, index) => {
-      const placeSnapshot =
-        placeSnapshots[index];
-
-      /*
-       * Si el lugar fue eliminado de la
-       * colección, simplemente se omite.
-       */
+const visibleFavoriteItems =
+  favoriteItems
+    .map((item, index) => ({
+      ...item,
+      placeSnapshot:
+        placeSnapshots[index],
+    }))
+    .filter((item) => {
       if (
-        !placeSnapshot.exists
+        !item.placeSnapshot.exists
       ) {
-        return;
+        return false;
       }
 
-      const place =
-        placeSnapshot.data();
+      return isPlaceVisibleInMobile(
+        item.placeSnapshot.data(),
+      );
+    });
 
-      /*
-       * El like permanece guardado, pero
-       * hidden y eliminados no aparecen
-       * en la aplicación móvil.
-       */
-      if (
-        !isPlaceVisibleInMobile(
-          place
-        )
-      ) {
-        return;
-      }
-
-      favorites.push(
+const favorites =
+  await Promise.all(
+    visibleFavoriteItems.map(
+      (item) =>
         mapFavoriteDoc(
           item.favoriteDoc,
-          placeSnapshot
-        )
-      );
-    }
+          item.placeSnapshot,
+        ),
+    ),
   );
+    
 
   return {
     favorites,
