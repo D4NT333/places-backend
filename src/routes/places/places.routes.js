@@ -19,6 +19,7 @@ import updateAdminPlaceReviewVisibilityController from "../../controllers/places
 import getAdminPlaceLsearchGalleryController from "../../controllers/places/getAdminPlaceLsearchGallery.controller.js";
 import getAdminPlaceAnalyticsController from "../../controllers/places/getAdminPlaceAnalytics.controller.js";
 import getGoogleFeedPhotoController from "../../controllers/places/getGoogleFeedPhoto.controller.js";
+import confirmPlaceActivityController from "../../controllers/places/interactions/confirmPlaceActivity.controller.js";
 
 import getPlaceGalleryController from "../../controllers/places/getPlaceGallery.controller.js";
 import getGoogleGalleryPhotoController from "../../controllers/places/getGoogleGalleryPhoto.controller.js";
@@ -96,6 +97,8 @@ router.post("/:placeId/likes/toggle",verifyFirebaseToken,togglePlaceLikeControll
 router.post("/:placeId/dwell-sessions",verifyFirebaseToken,startPlaceDwellSessionController);
 
 router.patch("/:placeId/dwell-sessions/:sessionId/close",verifyFirebaseToken,closePlaceDwellSessionController);
+
+router.post("/:placeId/activity-confirmation",verifyFirebaseToken,confirmPlaceActivityController);
 
 router.patch("/admin/:placeId/reports/:reportId/resolve",verifyFirebaseToken,resolveAdminPlaceReportController);
 
