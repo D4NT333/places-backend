@@ -1,4 +1,5 @@
 import {
+  FieldValue,
   Timestamp,
 } from "firebase-admin/firestore";
 
@@ -16,32 +17,43 @@ import {
   USER_STATUSES,
 } from "../../../utils/userModeration.js";
 
-import sendUserModerationNotificationService from "../../notifications/create/sendUserModerationNotification.service.js";
+import sendUserModerationNotificationService
+  from "../../notifications/create/sendUserModerationNotification.service.js";
+
+const ADMIN_USERS_COLLECTION =
+  "adminUsers";
+
+const ADMIN_WEEKLY_ACTIVITY_COLLECTION =
+  "weeklyActivity";
 
 function createServiceError(
   message,
   statusCode,
 ) {
-  const error = new Error(message);
+  const error =
+    new Error(message);
 
-  error.statusCode = statusCode;
+  error.statusCode =
+    statusCode;
 
   return error;
 }
 
 function normalizeDecision(value) {
-  const normalizedValue = String(
-    value || "",
-  )
-    .trim()
-    .toLowerCase();
+  const normalizedValue =
+    String(
+      value || "",
+    )
+      .trim()
+      .toLowerCase();
 
   /*
    * El modal manda dismissed.
    * Internamente guardamos discarded.
    */
   if (
-    normalizedValue === "dismissed"
+    normalizedValue ===
+    "dismissed"
   ) {
     return "discarded";
   }
@@ -58,6 +70,36 @@ function getReportedUserId(report) {
   );
 }
 
+function getCurrentWeekId(
+  date = new Date(),
+) {
+  const currentDate =
+    new Date(
+      Date.UTC(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate(),
+      ),
+    );
+
+  const currentDay =
+    currentDate.getUTCDay();
+
+  const daysSinceMonday =
+    currentDay === 0
+      ? 6
+      : currentDay - 1;
+
+  currentDate.setUTCDate(
+    currentDate.getUTCDate() -
+      daysSinceMonday,
+  );
+
+  return currentDate
+    .toISOString()
+    .slice(0, 10);
+}
+
 export default async function resolveAdminUserReportService({
   userId,
   reportId,
@@ -65,24 +107,30 @@ export default async function resolveAdminUserReportService({
   resolutionNote,
   adminUid,
 }) {
-  const cleanUserId = String(
-    userId || "",
-  ).trim();
+  const cleanUserId =
+    String(
+      userId || "",
+    ).trim();
 
-  const cleanReportId = String(
-    reportId || "",
-  ).trim();
+  const cleanReportId =
+    String(
+      reportId || "",
+    ).trim();
 
-  const cleanAdminUid = String(
-    adminUid || "",
-  ).trim();
+  const cleanAdminUid =
+    String(
+      adminUid || "",
+    ).trim();
 
   const cleanDecision =
-    normalizeDecision(decision);
+    normalizeDecision(
+      decision,
+    );
 
-  const cleanResolutionNote = String(
-    resolutionNote || "",
-  ).trim();
+  const cleanResolutionNote =
+    String(
+      resolutionNote || "",
+    ).trim();
 
   if (!cleanUserId) {
     throw createServiceError(
@@ -106,8 +154,10 @@ export default async function resolveAdminUserReportService({
   }
 
   if (
-    cleanDecision !== "resolved" &&
-    cleanDecision !== "discarded"
+    cleanDecision !==
+      "resolved" &&
+    cleanDecision !==
+      "discarded"
   ) {
     throw createServiceError(
       "La decisión debe ser resolved o discarded.",
@@ -116,7 +166,8 @@ export default async function resolveAdminUserReportService({
   }
 
   if (
-    cleanResolutionNote.length < 10
+    cleanResolutionNote.length <
+    10
   ) {
     throw createServiceError(
       "La nota de resolución debe tener al menos 10 caracteres.",
@@ -125,7 +176,8 @@ export default async function resolveAdminUserReportService({
   }
 
   if (
-    cleanResolutionNote.length > 500
+    cleanResolutionNote.length >
+    500
   ) {
     throw createServiceError(
       "La nota de resolución no puede superar los 500 caracteres.",
@@ -133,15 +185,49 @@ export default async function resolveAdminUserReportService({
     );
   }
 
-  const now = Timestamp.now();
+  const now =
+    Timestamp.now();
 
-  const userRef = db
-    .collection("user")
-    .doc(cleanUserId);
+  const currentWeekId =
+    getCurrentWeekId(
+      now.toDate(),
+    );
 
-  const reportRef = db
-    .collection("reports")
-    .doc(cleanReportId);
+  const userRef =
+    db
+      .collection(
+        "user",
+      )
+      .doc(
+        cleanUserId,
+      );
+
+  const reportRef =
+    db
+      .collection(
+        "reports",
+      )
+      .doc(
+        cleanReportId,
+      );
+
+  const adminRef =
+    db
+      .collection(
+        ADMIN_USERS_COLLECTION,
+      )
+      .doc(
+        cleanAdminUid,
+      );
+
+  const adminWeeklyActivityRef =
+    adminRef
+      .collection(
+        ADMIN_WEEKLY_ACTIVITY_COLLECTION,
+      )
+      .doc(
+        currentWeekId,
+      );
 
   /*
    * La referencia se genera fuera de la transacción
@@ -149,7 +235,9 @@ export default async function resolveAdminUserReportService({
    */
   const moderationHistoryRef =
     userRef
-      .collection("moderationHistory")
+      .collection(
+        "moderationHistory",
+      )
       .doc();
 
   const transactionResult =
@@ -159,18 +247,27 @@ export default async function resolveAdminUserReportService({
           userSnapshot,
           reportSnapshot,
         ] = await Promise.all([
-          transaction.get(userRef),
-          transaction.get(reportRef),
+          transaction.get(
+            userRef,
+          ),
+
+          transaction.get(
+            reportRef,
+          ),
         ]);
 
-        if (!userSnapshot.exists) {
+        if (
+          !userSnapshot.exists
+        ) {
           throw createServiceError(
             "El usuario reportado no existe.",
             404,
           );
         }
 
-        if (!reportSnapshot.exists) {
+        if (
+          !reportSnapshot.exists
+        ) {
           throw createServiceError(
             "El reporte no existe.",
             404,
@@ -183,15 +280,19 @@ export default async function resolveAdminUserReportService({
         const report =
           reportSnapshot.data();
 
-        const reportTarget = String(
-          report.reportTarget ||
-            report.target ||
-            "",
-        )
-          .trim()
-          .toLowerCase();
+        const reportTarget =
+          String(
+            report.reportTarget ||
+              report.target ||
+              "",
+          )
+            .trim()
+            .toLowerCase();
 
-        if (reportTarget !== "user") {
+        if (
+          reportTarget !==
+          "user"
+        ) {
           throw createServiceError(
             "El reporte no corresponde a un usuario.",
             400,
@@ -199,10 +300,13 @@ export default async function resolveAdminUserReportService({
         }
 
         const reportedUserId =
-          getReportedUserId(report);
+          getReportedUserId(
+            report,
+          );
 
         if (
-          reportedUserId !== cleanUserId
+          reportedUserId !==
+          cleanUserId
         ) {
           throw createServiceError(
             "El reporte no pertenece al usuario indicado.",
@@ -212,7 +316,8 @@ export default async function resolveAdminUserReportService({
 
         const currentReportStatus =
           String(
-            report.status || "pending",
+            report.status ||
+              "pending",
           )
             .trim()
             .toLowerCase();
@@ -246,8 +351,65 @@ export default async function resolveAdminUserReportService({
           );
 
         /*
+         * Contador total del administrador.
+         *
+         * Se incrementa tanto al validar como
+         * al descartar, porque en ambos casos
+         * el reporte fue procesado.
+         */
+        transaction.set(
+          adminRef,
+          {
+            resolvedReportsCount:
+              FieldValue.increment(
+                1,
+              ),
+
+            resolvedUserReportsCount:
+              FieldValue.increment(
+                1,
+              ),
+
+            updatedAt:
+              now,
+          },
+          {
+            merge:
+              true,
+          },
+        );
+
+        /*
+         * Historial semanal del administrador.
+         */
+        transaction.set(
+          adminWeeklyActivityRef,
+          {
+            weekId:
+              currentWeekId,
+
+            resolvedReportsCount:
+              FieldValue.increment(
+                1,
+              ),
+
+            resolvedUserReportsCount:
+              FieldValue.increment(
+                1,
+              ),
+
+            updatedAt:
+              now,
+          },
+          {
+            merge:
+              true,
+          },
+        );
+
+        /*
          * Descartar:
-         * no cambia usuario ni contador.
+         * no cambia usuario ni contador de advertencias.
          */
         if (
           cleanDecision ===
@@ -296,6 +458,12 @@ export default async function resolveAdminUserReportService({
 
             shouldDisableAuth:
               false,
+
+            resolvedBy:
+              cleanAdminUid,
+
+            weekId:
+              currentWeekId,
           };
         }
 
@@ -304,7 +472,8 @@ export default async function resolveAdminUserReportService({
          * incrementa advertencia.
          */
         const nextWarningCount =
-          currentWarningCount + 1;
+          currentWarningCount +
+          1;
 
         const calculatedStatus =
           getUserStatusFromWarningCount(
@@ -391,6 +560,7 @@ export default async function resolveAdminUserReportService({
               nextWarningCount,
 
             previousStatus,
+
             resultingStatus,
 
             appliedBy:
@@ -432,7 +602,8 @@ export default async function resolveAdminUserReportService({
 
           userUpdates[
             "moderation.banReason"
-          ] = "repeated_violations";
+          ] =
+            "repeated_violations";
         }
 
         transaction.update(
@@ -457,6 +628,7 @@ export default async function resolveAdminUserReportService({
             nextWarningCount,
 
           previousStatus,
+
           resultingStatus,
 
           becameBanned,
@@ -470,6 +642,12 @@ export default async function resolveAdminUserReportService({
           shouldDisableAuth:
             resultingStatus ===
             USER_STATUSES.BANNED,
+
+          resolvedBy:
+            cleanAdminUid,
+
+          weekId:
+            currentWeekId,
         };
       },
     );
@@ -479,12 +657,14 @@ export default async function resolveAdminUserReportService({
    * se bloquea Firebase Authentication.
    */
   if (
-    transactionResult.shouldDisableAuth
+    transactionResult
+      .shouldDisableAuth
   ) {
     await auth.updateUser(
       cleanUserId,
       {
-        disabled: true,
+        disabled:
+          true,
       },
     );
 
@@ -500,7 +680,8 @@ export default async function resolveAdminUserReportService({
         },
       },
       {
-        merge: true,
+        merge:
+          true,
       },
     );
   }
@@ -509,87 +690,102 @@ export default async function resolveAdminUserReportService({
    * Solo se notifica cuando el reporte fue validado.
    * Los reportes descartados no generan sanción ni mensaje.
    */
-  let notificationResult = null;
+  let notificationResult =
+    null;
 
-if (
-  transactionResult.warningApplied
-) {
-  console.log(
-    "Enviando notificación por reporte validado:",
-    {
-      uid:
-        cleanUserId,
+  if (
+    transactionResult
+      .warningApplied
+  ) {
+    console.log(
+      "Enviando notificación por reporte validado:",
+      {
+        uid:
+          cleanUserId,
 
-      moderationId:
-        transactionResult.moderationId,
+        moderationId:
+          transactionResult
+            .moderationId,
 
-      moderationType:
-        transactionResult.resultingStatus ===
-        USER_STATUSES.BANNED
-          ? MODERATION_TYPES.PERMANENT_BAN
-          : MODERATION_TYPES.WARNING,
+        moderationType:
+          transactionResult
+            .resultingStatus ===
+          USER_STATUSES.BANNED
+            ? MODERATION_TYPES
+                .PERMANENT_BAN
+            : MODERATION_TYPES
+                .WARNING,
 
-      warningCount:
-        transactionResult.warningCount,
+        warningCount:
+          transactionResult
+            .warningCount,
 
-      reportId:
-        cleanReportId,
-    },
-  );
+        reportId:
+          cleanReportId,
+      },
+    );
 
-  notificationResult =
-    await sendUserModerationNotificationService({
-      uid:
-        cleanUserId,
+    notificationResult =
+      await sendUserModerationNotificationService({
+        uid:
+          cleanUserId,
 
-      moderationId:
-        transactionResult.moderationId,
+        moderationId:
+          transactionResult
+            .moderationId,
 
-      moderationType:
-        transactionResult.resultingStatus ===
-        USER_STATUSES.BANNED
-          ? MODERATION_TYPES.PERMANENT_BAN
-          : MODERATION_TYPES.WARNING,
+        moderationType:
+          transactionResult
+            .resultingStatus ===
+          USER_STATUSES.BANNED
+            ? MODERATION_TYPES
+                .PERMANENT_BAN
+            : MODERATION_TYPES
+                .WARNING,
 
-      warningCount:
-        transactionResult.warningCount,
+        warningCount:
+          transactionResult
+            .warningCount,
 
-      reason:
-        transactionResult.reason ||
-        "validated_report",
+        reason:
+          transactionResult
+            .reason ||
+          "validated_report",
 
-      reasonLabel:
-        transactionResult.reasonLabel ||
-        "Reporte validado",
+        reasonLabel:
+          transactionResult
+            .reasonLabel ||
+          "Reporte validado",
 
-      message:
-        cleanResolutionNote,
+        message:
+          cleanResolutionNote,
 
-      source:
-        MODERATION_SOURCES
-          .VALIDATED_REPORT,
+        source:
+          MODERATION_SOURCES
+            .VALIDATED_REPORT,
 
-      reportId:
-        cleanReportId,
-    });
+        reportId:
+          cleanReportId,
+      });
 
-  console.log(
-    "Resultado notificación por reporte:",
+    console.log(
+      "Resultado notificación por reporte:",
+      notificationResult,
+    );
+  }
+
+  return {
+    ok:
+      true,
+
+    userId:
+      cleanUserId,
+
+    maxWarnings:
+      MAX_WARNINGS,
+
+    ...transactionResult,
+
     notificationResult,
-  );
-}
-
-return {
-  ok: true,
-
-  userId:
-    cleanUserId,
-
-  maxWarnings:
-    MAX_WARNINGS,
-
-  ...transactionResult,
-
-  notificationResult,
-};
+  };
 }

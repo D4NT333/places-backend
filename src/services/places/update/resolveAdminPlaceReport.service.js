@@ -6,17 +6,27 @@ import {
   db,
 } from "../../../config/firebase.js";
 
-const REPORT_DECISIONS = new Set([
-  "resolved",
-  "dismissed",
-]);
+const ADMIN_USERS_COLLECTION =
+  "adminUsers";
+
+const ADMIN_WEEKLY_ACTIVITY_COLLECTION =
+  "weeklyActivity";
+
+const REPORT_DECISIONS =
+  new Set([
+    "resolved",
+    "dismissed",
+  ]);
 
 function createHttpError(
   message,
-  statusCode = 400
+  statusCode = 400,
 ) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
+  const error =
+    new Error(message);
+
+  error.statusCode =
+    statusCode;
 
   return error;
 }
@@ -28,16 +38,53 @@ function cleanText(value) {
 }
 
 function normalizeCount(value) {
-  const parsed = Number(value);
+  const parsed =
+    Number(value);
 
-  if (!Number.isFinite(parsed)) {
+  if (
+    !Number.isFinite(
+      parsed,
+    )
+  ) {
     return 0;
   }
 
   return Math.max(
-    Math.trunc(parsed),
-    0
+    Math.trunc(
+      parsed,
+    ),
+    0,
   );
+}
+
+function getCurrentWeekId(
+  date = new Date(),
+) {
+  const currentDate =
+    new Date(
+      Date.UTC(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate(),
+      ),
+    );
+
+  const currentDay =
+    currentDate.getUTCDay();
+
+  const daysSinceMonday =
+    currentDay === 0
+      ? 6
+      : currentDay - 1;
+
+  currentDate.setUTCDate(
+    currentDate.getUTCDate() -
+      daysSinceMonday,
+  );
+
+  return currentDate
+    .toISOString()
+    .slice(0, 10);
 }
 
 /*
@@ -50,14 +97,17 @@ function normalizeCount(value) {
  * 4 o más         -> hidden
  */
 function getPlaceModerationStatus(
-  validReportsCount
+  validReportsCount,
 ) {
-  const count = Math.max(
-    Math.trunc(
-      Number(validReportsCount) || 0
-    ),
-    0
-  );
+  const count =
+    Math.max(
+      Math.trunc(
+        Number(
+          validReportsCount,
+        ) || 0,
+      ),
+      0,
+    );
 
   if (count >= 4) {
     return "hidden";
@@ -78,19 +128,26 @@ async function assertAdminUser(uid) {
   if (!uid) {
     throw createHttpError(
       "Usuario no autenticado.",
-      401
+      401,
     );
   }
 
-  const adminSnapshot = await db
-    .collection("adminUsers")
-    .doc(uid)
-    .get();
+  const adminSnapshot =
+    await db
+      .collection(
+        ADMIN_USERS_COLLECTION,
+      )
+      .doc(
+        uid,
+      )
+      .get();
 
-  if (!adminSnapshot.exists) {
+  if (
+    !adminSnapshot.exists
+  ) {
     throw createHttpError(
       "No tienes permisos administrativos.",
-      403
+      403,
     );
   }
 
@@ -100,16 +157,16 @@ async function assertAdminUser(uid) {
 function getReportTarget(report) {
   return cleanText(
     report.reportTarget ||
-    report.target ||
-    report.type
+      report.target ||
+      report.type,
   ).toLowerCase();
 }
 
 function getReportPlaceId(report) {
   return cleanText(
     report.place?.placeId ||
-    report.placeId ||
-    report.metadata?.placeId
+      report.placeId ||
+      report.metadata?.placeId,
   );
 }
 
@@ -120,327 +177,476 @@ export default async function resolveAdminPlaceReportService({
   decision,
   resolutionNote,
 }) {
-  await assertAdminUser(adminUid);
+  await assertAdminUser(
+    adminUid,
+  );
+
+  const normalizedAdminUid =
+    cleanText(
+      adminUid,
+    );
 
   const normalizedPlaceId =
-    cleanText(placeId);
+    cleanText(
+      placeId,
+    );
 
   const normalizedReportId =
-    cleanText(reportId);
+    cleanText(
+      reportId,
+    );
 
   const normalizedDecision =
-    cleanText(decision).toLowerCase();
+    cleanText(
+      decision,
+    ).toLowerCase();
 
   const normalizedResolutionNote =
-    cleanText(resolutionNote);
+    cleanText(
+      resolutionNote,
+    );
 
   if (!normalizedPlaceId) {
     throw createHttpError(
       "El identificador del lugar es obligatorio.",
-      400
+      400,
     );
   }
 
   if (!normalizedReportId) {
     throw createHttpError(
       "El identificador del reporte es obligatorio.",
-      400
+      400,
     );
   }
 
   if (
     !REPORT_DECISIONS.has(
-      normalizedDecision
+      normalizedDecision,
     )
   ) {
     throw createHttpError(
       "La decisión debe ser resolved o dismissed.",
-      400
+      400,
     );
   }
 
   if (
-    normalizedResolutionNote.length < 10
+    normalizedResolutionNote
+      .length < 10
   ) {
     throw createHttpError(
       "La nota de resolución debe tener al menos 10 caracteres.",
-      400
+      400,
     );
   }
 
   if (
-    normalizedResolutionNote.length > 500
+    normalizedResolutionNote
+      .length > 500
   ) {
     throw createHttpError(
       "La nota de resolución no puede superar 500 caracteres.",
-      400
+      400,
     );
   }
 
-  const placeRef = db
-    .collection("places")
-    .doc(normalizedPlaceId);
+  const currentWeekId =
+    getCurrentWeekId();
 
-  const reportRef = db
-    .collection("reports")
-    .doc(normalizedReportId);
+  const placeRef =
+    db
+      .collection(
+        "places",
+      )
+      .doc(
+        normalizedPlaceId,
+      );
 
-  const moderationActionRef = placeRef
-    .collection("moderationActions")
-    .doc();
+  const reportRef =
+    db
+      .collection(
+        "reports",
+      )
+      .doc(
+        normalizedReportId,
+      );
 
-  const result = await db.runTransaction(
-    async (transaction) => {
-      const [
-        placeSnapshot,
-        reportSnapshot,
-      ] = await Promise.all([
-        transaction.get(placeRef),
-        transaction.get(reportRef),
-      ]);
+  const adminRef =
+    db
+      .collection(
+        ADMIN_USERS_COLLECTION,
+      )
+      .doc(
+        normalizedAdminUid,
+      );
 
-      if (!placeSnapshot.exists) {
-        throw createHttpError(
-          "No se encontró el lugar.",
-          404
+  const adminWeeklyActivityRef =
+    adminRef
+      .collection(
+        ADMIN_WEEKLY_ACTIVITY_COLLECTION,
+      )
+      .doc(
+        currentWeekId,
+      );
+
+  const moderationActionRef =
+    placeRef
+      .collection(
+        "moderationActions",
+      )
+      .doc();
+
+  const result =
+    await db.runTransaction(
+      async (transaction) => {
+        const [
+          placeSnapshot,
+          reportSnapshot,
+        ] = await Promise.all([
+          transaction.get(
+            placeRef,
+          ),
+
+          transaction.get(
+            reportRef,
+          ),
+        ]);
+
+        if (
+          !placeSnapshot.exists
+        ) {
+          throw createHttpError(
+            "No se encontró el lugar.",
+            404,
+          );
+        }
+
+        if (
+          !reportSnapshot.exists
+        ) {
+          throw createHttpError(
+            "No se encontró el reporte.",
+            404,
+          );
+        }
+
+        const place =
+          placeSnapshot.data();
+
+        const report =
+          reportSnapshot.data();
+
+        const reportPlaceId =
+          getReportPlaceId(
+            report,
+          );
+
+        if (
+          reportPlaceId &&
+          reportPlaceId !==
+            normalizedPlaceId
+        ) {
+          throw createHttpError(
+            "El reporte no pertenece al lugar indicado.",
+            409,
+          );
+        }
+
+        if (
+          report.status ===
+            "resolved" ||
+          report.status ===
+            "dismissed"
+        ) {
+          throw createHttpError(
+            "Este reporte ya fue resuelto.",
+            409,
+          );
+        }
+
+        const reportTarget =
+          getReportTarget(
+            report,
+          );
+
+        /*
+         * Solamente los reportes dirigidos
+         * directamente al lugar modifican
+         * su estado de moderación.
+         */
+        const affectsPlace =
+          reportTarget ===
+          "place";
+
+        const currentValidReportsCount =
+          normalizeCount(
+            place.moderation
+              ?.validReportsCount ??
+            place.metrics
+              ?.validReportsCount,
+          );
+
+        const currentDismissedReportsCount =
+          normalizeCount(
+            place.moderation
+              ?.dismissedReportsCount ??
+            place.metrics
+              ?.dismissedReportsCount,
+          );
+
+        const isResolved =
+          normalizedDecision ===
+          "resolved";
+
+        const increasesValidReports =
+          isResolved &&
+          affectsPlace;
+
+        const nextValidReportsCount =
+          increasesValidReports
+            ? currentValidReportsCount +
+              1
+            : currentValidReportsCount;
+
+        const nextDismissedReportsCount =
+          normalizedDecision ===
+          "dismissed"
+            ? currentDismissedReportsCount +
+              1
+            : currentDismissedReportsCount;
+
+        const currentModerationStatus =
+          cleanText(
+            place.status,
+          ) ||
+          "published";
+
+        const nextModerationStatus =
+          increasesValidReports
+            ? getPlaceModerationStatus(
+                nextValidReportsCount,
+              )
+            : currentModerationStatus;
+
+        const now =
+          FieldValue
+            .serverTimestamp();
+
+        transaction.update(
+          reportRef,
+          {
+            status:
+              normalizedDecision,
+
+            "admin.resolutionNote":
+              normalizedResolutionNote,
+
+            "admin.resolvedBy":
+              normalizedAdminUid,
+
+            "admin.resolvedAt":
+              now,
+
+            updatedAt:
+              now,
+          },
         );
-      }
 
-      if (!reportSnapshot.exists) {
-        throw createHttpError(
-          "No se encontró el reporte.",
-          404
-        );
-      }
+        const placeUpdates = {
+          "moderation.validReportsCount":
+            nextValidReportsCount,
 
-      const place =
-        placeSnapshot.data();
+          "moderation.dismissedReportsCount":
+            nextDismissedReportsCount,
 
-      const report =
-        reportSnapshot.data();
+          "metrics.validReportsCount":
+            nextValidReportsCount,
 
-      const reportPlaceId =
-        getReportPlaceId(report);
-
-      if (
-        reportPlaceId &&
-        reportPlaceId !== normalizedPlaceId
-      ) {
-        throw createHttpError(
-          "El reporte no pertenece al lugar indicado.",
-          409
-        );
-      }
-
-      if (
-        report.status === "resolved" ||
-        report.status === "dismissed"
-      ) {
-        throw createHttpError(
-          "Este reporte ya fue resuelto.",
-          409
-        );
-      }
-
-      const reportTarget =
-        getReportTarget(report);
-
-      /*
-       * Solamente los reportes dirigidos
-       * directamente al lugar modifican
-       * su estado de moderación.
-       */
-      const affectsPlace =
-        reportTarget === "place";
-
-      const currentValidReportsCount =
-        normalizeCount(
-          place.moderation
-            ?.validReportsCount ??
-          place.metrics
-            ?.validReportsCount
-        );
-
-      const currentDismissedReportsCount =
-        normalizeCount(
-          place.moderation
-            ?.dismissedReportsCount ??
-          place.metrics
-            ?.dismissedReportsCount
-        );
-
-      const isResolved =
-        normalizedDecision === "resolved";
-
-      const increasesValidReports =
-        isResolved && affectsPlace;
-
-      const nextValidReportsCount =
-        increasesValidReports
-          ? currentValidReportsCount + 1
-          : currentValidReportsCount;
-
-      const nextDismissedReportsCount =
-        normalizedDecision === "dismissed"
-          ? currentDismissedReportsCount + 1
-          : currentDismissedReportsCount;
-
-      const currentModerationStatus =
-        cleanText(place.status) ||
-        "published";
-
-      const nextModerationStatus =
-        increasesValidReports
-          ? getPlaceModerationStatus(
-              nextValidReportsCount
-            )
-          : currentModerationStatus;
-
-      transaction.update(
-        reportRef,
-        {
-          status:
-            normalizedDecision,
-
-          "admin.resolutionNote":
-            normalizedResolutionNote,
-
-          "admin.resolvedBy":
-            adminUid,
-
-          "admin.resolvedAt":
-            FieldValue.serverTimestamp(),
+          "metrics.dismissedReportsCount":
+            nextDismissedReportsCount,
 
           updatedAt:
-            FieldValue.serverTimestamp(),
+            now,
+        };
+
+        if (
+          increasesValidReports
+        ) {
+          placeUpdates.status =
+            nextModerationStatus;
+
+          placeUpdates[
+            "moderation.status"
+          ] =
+            nextModerationStatus;
+
+          placeUpdates[
+            "moderation.source"
+          ] =
+            "reports";
+
+          placeUpdates[
+            "moderation.lastValidatedReportId"
+          ] =
+            normalizedReportId;
+
+          placeUpdates[
+            "moderation.lastReportValidatedAt"
+          ] =
+            now;
+
+          placeUpdates[
+            "moderation.updatedAt"
+          ] =
+            now;
         }
-      );
 
-      const placeUpdates = {
-        "moderation.validReportsCount":
-          nextValidReportsCount,
+        transaction.update(
+          placeRef,
+          placeUpdates,
+        );
 
-        "moderation.dismissedReportsCount":
-          nextDismissedReportsCount,
+        transaction.set(
+          moderationActionRef,
+          {
+            actionId:
+              moderationActionRef.id,
 
-        "metrics.validReportsCount":
-          nextValidReportsCount,
+            placeId:
+              normalizedPlaceId,
 
-        "metrics.dismissedReportsCount":
-          nextDismissedReportsCount,
+            type:
+              normalizedDecision ===
+              "resolved"
+                ? "report_validated"
+                : "report_dismissed",
 
-        updatedAt:
-          FieldValue.serverTimestamp(),
-      };
+            source:
+              "report",
 
-      if (increasesValidReports) {
-        placeUpdates.status =
-          nextModerationStatus;
+            reportId:
+              normalizedReportId,
 
-        placeUpdates[
-          "moderation.status"
-        ] = nextModerationStatus;
+            reportTarget:
+              reportTarget ||
+              null,
 
-        placeUpdates[
-          "moderation.source"
-        ] = "reports";
+            affectsPlace,
 
-        placeUpdates[
-          "moderation.lastValidatedReportId"
-        ] = normalizedReportId;
+            previousStatus:
+              currentModerationStatus,
 
-        placeUpdates[
-          "moderation.lastReportValidatedAt"
-        ] = FieldValue.serverTimestamp();
+            nextStatus:
+              nextModerationStatus,
 
-        placeUpdates[
-          "moderation.updatedAt"
-        ] = FieldValue.serverTimestamp();
-      }
+            previousValidReportsCount:
+              currentValidReportsCount,
 
-      transaction.update(
-        placeRef,
-        placeUpdates
-      );
+            nextValidReportsCount,
 
-      transaction.set(
-        moderationActionRef,
-        {
-          actionId:
-            moderationActionRef.id,
+            resolutionNote:
+              normalizedResolutionNote,
+
+            performedBy:
+              normalizedAdminUid,
+
+            createdAt:
+              now,
+          },
+        );
+
+        /*
+         * Contador histórico total.
+         */
+        transaction.set(
+          adminRef,
+          {
+            resolvedReportsCount:
+              FieldValue.increment(
+                1,
+              ),
+
+            resolvedPlaceReportsCount:
+              FieldValue.increment(
+                1,
+              ),
+
+            updatedAt:
+              now,
+          },
+          {
+            merge:
+              true,
+          },
+        );
+
+        /*
+         * Contador semanal.
+         */
+        transaction.set(
+          adminWeeklyActivityRef,
+          {
+            weekId:
+              currentWeekId,
+
+            resolvedReportsCount:
+              FieldValue.increment(
+                1,
+              ),
+
+            resolvedPlaceReportsCount:
+              FieldValue.increment(
+                1,
+              ),
+
+            updatedAt:
+              now,
+          },
+          {
+            merge:
+              true,
+          },
+        );
+
+        return {
+          reportId:
+            normalizedReportId,
 
           placeId:
             normalizedPlaceId,
 
-          type:
-            normalizedDecision === "resolved"
-              ? "report_validated"
-              : "report_dismissed",
-
-          source:
-            "report",
-
-          reportId:
-            normalizedReportId,
+          decision:
+            normalizedDecision,
 
           reportTarget:
-            reportTarget || null,
+            reportTarget ||
+            null,
 
           affectsPlace,
 
-          previousStatus:
-            currentModerationStatus,
+          resolvedBy:
+            normalizedAdminUid,
 
-          nextStatus:
-            nextModerationStatus,
+          weekId:
+            currentWeekId,
 
-          previousValidReportsCount:
-            currentValidReportsCount,
+          moderation: {
+            previousStatus:
+              currentModerationStatus,
 
-          nextValidReportsCount,
+            status:
+              nextModerationStatus,
 
-          resolutionNote:
-            normalizedResolutionNote,
+            validReportsCount:
+              nextValidReportsCount,
 
-          performedBy:
-            adminUid,
-
-          createdAt:
-            FieldValue.serverTimestamp(),
-        }
-      );
-
-      return {
-        reportId:
-          normalizedReportId,
-
-        placeId:
-          normalizedPlaceId,
-
-        decision:
-          normalizedDecision,
-
-        reportTarget:
-          reportTarget || null,
-
-        affectsPlace,
-
-        moderation: {
-          previousStatus:
-            currentModerationStatus,
-
-          status:
-            nextModerationStatus,
-
-          validReportsCount:
-            nextValidReportsCount,
-
-          dismissedReportsCount:
-            nextDismissedReportsCount,
-        },
-      };
-    }
-  );
+            dismissedReportsCount:
+              nextDismissedReportsCount,
+          },
+        };
+      },
+    );
 
   return result;
 }
