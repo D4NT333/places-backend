@@ -2,6 +2,12 @@ import { FieldValue } from "firebase-admin/firestore";
 import { latLngToCell } from "h3-js";
 import { db } from "../../../config/firebase.js";
 
+const ADMIN_USERS_COLLECTION =
+  "adminUsers";
+
+const ADMIN_WEEKLY_ACTIVITY_COLLECTION =
+  "weeklyActivity";
+
 function createHttpError(message, statusCode = 400) {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -408,8 +414,21 @@ export default async function registerPlaceFromCandidateService({
   const placeRef = db.collection("places").doc();
   const placeId = placeRef.id;
 
-  const now = FieldValue.serverTimestamp();
-  const adminUid = adminUser?.uid || "admin_uid_or_system";
+  const adminUid =
+  adminUser?.uid;
+
+if (!adminUid) {
+  throw createHttpError(
+    "No se encontró el administrador autenticado.",
+    401,
+  );
+}
+
+const now =
+  FieldValue.serverTimestamp();
+
+const currentWeekId =
+  getCurrentWeekId();
 
   const h3Resolution = 9;
   const placeHexId = latLngToCell(lat, lng, h3Resolution);
@@ -520,21 +539,109 @@ confirmationStartedAt: null,
     photoCount: normalizedPhotos.length,
   };
 
-  await db.runTransaction(async (transaction) => {
-    transaction.set(placeRef, placeData);
+  const adminReference =
+  db
+    .collection(
+      ADMIN_USERS_COLLECTION,
+    )
+    .doc(
+      adminUid,
+    );
 
-    transaction.update(candidateRef, {
-      status: "accepted",
-      createdPlaceId: placeId,
-      acceptedAt: now,
-      reviewedBy: adminUid,
-      updatedAt: now,
-    });
-  });
+const adminWeeklyActivityReference =
+  adminReference
+    .collection(
+      ADMIN_WEEKLY_ACTIVITY_COLLECTION,
+    )
+    .doc(
+      currentWeekId,
+    );
 
-  return {
-    placeId,
-    candidateId: candidateRef.id,
-    googlePlaceId,
-  };
+  await db.runTransaction(
+  async (transaction) => {
+    transaction.set(
+      placeRef,
+      placeData,
+    );
+
+    transaction.update(
+      candidateRef,
+      {
+        status:
+          "accepted",
+
+        createdPlaceId:
+          placeId,
+
+        acceptedAt:
+          now,
+
+        reviewedBy:
+          adminUid,
+
+        updatedAt:
+          now,
+      },
+    );
+
+    /*
+     * Contador total del administrador.
+     *
+     * Funciona tanto para admin como para
+     * super_admin porque ambos utilizan su UID.
+     */
+    transaction.set(
+      adminReference,
+      {
+        acceptedPlacesCount:
+          FieldValue.increment(1),
+
+        updatedAt:
+          now,
+      },
+      {
+        merge: true,
+      },
+    );
+
+    /*
+     * Historial semanal.
+     *
+     * Cada semana utiliza un documento diferente,
+     * por lo que no se requiere ningún job para
+     * reiniciar los contadores.
+     */
+    transaction.set(
+      adminWeeklyActivityReference,
+      {
+        weekId:
+          currentWeekId,
+
+        acceptedPlacesCount:
+          FieldValue.increment(1),
+
+        updatedAt:
+          now,
+      },
+      {
+        merge: true,
+      },
+    );
+  },
+);
+
+ return {
+  placeId,
+
+  candidateId:
+    candidateRef.id,
+
+  googlePlaceId,
+
+  acceptedBy:
+    adminUid,
+
+  weekId:
+    currentWeekId,
+};
 }

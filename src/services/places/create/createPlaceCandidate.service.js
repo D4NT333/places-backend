@@ -11,6 +11,8 @@ const INITIAL_SEARCH_RESOLUTION = 8;
 const MAX_SEARCH_RESOLUTION = 8;
 
 const CANDIDATES_COLLECTION = "candidatesPlaces";
+const REJECTED_GOOGLE_PLACES_COLLECTION =
+  "rejectedGooglePlaces";
 const DEFAULT_STATUS = "in_review";
 const DEFAULT_SOURCE = "google";
 const DEFAULT_IMPORTED_BY = "admin_uid_or_system";
@@ -74,23 +76,125 @@ async function getExistingCandidatePlaceIds(googlePlaceIds = []) {
   return existingIds;
 }
 
-function splitNewAndExistingPlaces(places = [], existingIds = new Set()) {
+async function getRejectedGooglePlaceIds(
+  googlePlaceIds = [],
+) {
+  if (googlePlaceIds.length === 0) {
+    return new Set();
+  }
+
+  const rejectedIds =
+    new Set();
+
+  const chunks =
+    chunkArray(
+      googlePlaceIds,
+      30,
+    );
+
+  for (const chunk of chunks) {
+    const references =
+      chunk.map(
+        (googlePlaceId) =>
+          db
+            .collection(
+              REJECTED_GOOGLE_PLACES_COLLECTION,
+            )
+            .doc(
+              googlePlaceId,
+            ),
+      );
+
+    const snapshots =
+      await db.getAll(
+        ...references,
+      );
+
+    snapshots.forEach(
+      (snapshot) => {
+        if (snapshot.exists) {
+          rejectedIds.add(
+            snapshot.id,
+          );
+        }
+      },
+    );
+  }
+
+  return rejectedIds;
+}
+
+function splitCandidatePlaces({
+  places = [],
+  existingCandidateIds =
+    new Set(),
+  rejectedGooglePlaceIds =
+    new Set(),
+}) {
   const newPlaces = [];
   const skippedPlaces = [];
 
   for (const place of places) {
-    if (!place.id) continue;
+    const googlePlaceId =
+      place?.id;
 
-    if (existingIds.has(place.id)) {
+    if (!googlePlaceId) {
       skippedPlaces.push({
-        googlePlaceId: place.id,
-        skippedReason: "already_exists_in_candidates_places",
+        googlePlaceId:
+          null,
+
+        skippedReason:
+          "missing_google_place_id",
       });
 
       continue;
     }
 
-    newPlaces.push(place);
+    /*
+     * Primero revisamos la lista permanente
+     * de lugares rechazados.
+     *
+     * Así el motivo registrado será
+     * "previously_rejected", aunque el candidato
+     * todavía exista en candidatesPlaces.
+     */
+    if (
+      rejectedGooglePlaceIds.has(
+        googlePlaceId,
+      )
+    ) {
+      skippedPlaces.push({
+        googlePlaceId,
+
+        skippedReason:
+          "previously_rejected",
+      });
+
+      continue;
+    }
+
+    /*
+     * Después evitamos duplicar candidatos
+     * pendientes, aceptados o ya registrados.
+     */
+    if (
+      existingCandidateIds.has(
+        googlePlaceId,
+      )
+    ) {
+      skippedPlaces.push({
+        googlePlaceId,
+
+        skippedReason:
+          "already_exists_in_candidates_places",
+      });
+
+      continue;
+    }
+
+    newPlaces.push(
+      place,
+    );
   }
 
   return {
@@ -241,18 +345,57 @@ export default async function createPlaceCandidateService(
     .map((place) => place.id)
     .filter(Boolean);
 
-  const existingIds = await getExistingCandidatePlaceIds(googlePlaceIds);
+ const [
+  existingCandidateIds,
+  rejectedGooglePlaceIds,
+] = await Promise.all([
+  getExistingCandidatePlaceIds(
+    googlePlaceIds,
+  ),
 
-  const { newPlaces, skippedPlaces } = splitNewAndExistingPlaces(
+  getRejectedGooglePlaceIds(
+    googlePlaceIds,
+  ),
+]);
+
+const {
+  newPlaces,
+  skippedPlaces,
+} = splitCandidatePlaces({
+  places:
     googlePlaces,
-    existingIds
-  );
+
+  existingCandidateIds,
+
+  rejectedGooglePlaceIds,
+});
 
   const registerResult = await registerCandidatePlaces({
     places: newPlaces,
     parentHexId: hexId,
     importedBy,
   });
+
+  const skippedExistingCandidatesCount =
+  skippedPlaces.filter(
+    (place) =>
+      place.skippedReason ===
+      "already_exists_in_candidates_places",
+  ).length;
+
+const skippedRejectedPlacesCount =
+  skippedPlaces.filter(
+    (place) =>
+      place.skippedReason ===
+      "previously_rejected",
+  ).length;
+
+const skippedWithoutGoogleIdCount =
+  skippedPlaces.filter(
+    (place) =>
+      place.skippedReason ===
+      "missing_google_place_id",
+  ).length;
 
   return {
     parentHexId: hexId,
@@ -278,12 +421,30 @@ export default async function createPlaceCandidateService(
     skippedPlaces,
 
     stats: {
-      googlePlacesReceived: googlePlaces.length,
-      uniqueGooglePlacesInRun: googlePlaces.length,
-      alreadyExistingInCandidatesPlaces: skippedPlaces.length,
-      readyToReview: newPlaces.length,
-      registeredInCandidatesPlaces: registerResult.registeredCount,
-    },
+  googlePlacesReceived:
+    googlePlaces.length,
+
+  uniqueGooglePlacesInRun:
+    googlePlaces.length,
+
+  alreadyExistingInCandidatesPlaces:
+    skippedExistingCandidatesCount,
+
+  previouslyRejected:
+    skippedRejectedPlacesCount,
+
+  missingGooglePlaceId:
+    skippedWithoutGoogleIdCount,
+
+  totalSkipped:
+    skippedPlaces.length,
+
+  readyToReview:
+    newPlaces.length,
+
+  registeredInCandidatesPlaces:
+    registerResult.registeredCount,
+},
 
     status: "ok",
   };
