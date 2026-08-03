@@ -463,8 +463,7 @@ function buildGooglePhotoUrl(
   photoReference,
 ) {
   if (
-    typeof photoReference !==
-      "string" ||
+    typeof photoReference !== "string" ||
     !photoReference.trim()
   ) {
     return null;
@@ -476,7 +475,7 @@ function buildGooglePhotoUrl(
     );
 
   const relativeUrl =
-    `/api/places/feed-photo/google?photoName=${encodedReference}`;
+    `/api/places/feed-photo/google?reference=${encodedReference}&maxWidthPx=240`;
 
   const publicApiUrl =
     getPublicApiUrl();
