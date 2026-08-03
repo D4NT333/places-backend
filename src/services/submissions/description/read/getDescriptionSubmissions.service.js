@@ -52,20 +52,61 @@ function buildPhotoUrl(
   baseUrl,
   mainPhoto
 ) {
-  const reference =
-    cleanText(
-      mainPhoto?.reference
-    );
-
-  if (!reference) {
+  if (
+    !mainPhoto ||
+    typeof mainPhoto !== "object"
+  ) {
     return null;
   }
 
-  return `${baseUrl}/api/places/photos/google?reference=${encodeURIComponent(
-    reference
-  )}`;
-}
+  /*
+   * Fotografías almacenadas en Firebase Storage.
+   *
+   * Para este listado conviene usar thumbnail,
+   * ya que la imagen se muestra en un avatar pequeño.
+   */
+  const firebasePhotoUrl =
+    cleanText(
+      mainPhoto.thumbnail?.url
+    ) ||
+    cleanText(
+      mainPhoto.medium?.url
+    ) ||
+    cleanText(
+      mainPhoto.url
+    ) ||
+    cleanText(
+      mainPhoto.original?.url
+    );
 
+  if (firebasePhotoUrl) {
+    return firebasePhotoUrl;
+  }
+
+  /*
+   * Fotografías provenientes de Google Places.
+   */
+  const googleReference =
+    cleanText(
+      mainPhoto.reference
+    );
+
+  if (!googleReference) {
+    return null;
+  }
+
+  const cleanBaseUrl =
+    cleanText(baseUrl)
+      .replace(/\/+$/, "");
+
+  if (!cleanBaseUrl) {
+    return null;
+  }
+
+  return `${cleanBaseUrl}/api/places/photos/google?reference=${encodeURIComponent(
+    googleReference
+  )}`;
+}s
 function normalizeStatus(status) {
   const cleanStatus =
     cleanText(status);
