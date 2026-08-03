@@ -111,8 +111,7 @@ router.patch("/admin/:placeId/moderation",verifyFirebaseToken,moderateAdminPlace
 router.post("/jobs/activity-checkpoints/reset",resetPlacesActivityCheckpointsController);
 
 
-router.post("/admin/google-places/register-from-candidate",verifyFirebaseToken,verifyActiveAdmin,registerPlaceFromCandidateController);
-
+router.patch("/admin/google-places/candidates/:candidateId/reject",verifyFirebaseToken,verifyActiveAdmin,rejectGooglePlaceCandidateController,);
 
 
 export default router;  
