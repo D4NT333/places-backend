@@ -106,7 +106,8 @@ function buildPhotoUrl(
   return `${cleanBaseUrl}/api/places/photos/google?reference=${encodeURIComponent(
     googleReference
   )}`;
-}s
+}
+
 function normalizeStatus(status) {
   const cleanStatus =
     cleanText(status);
