@@ -1,5 +1,8 @@
-import { db } from "../../../../config/firebase.js";
 import admin from "firebase-admin";
+
+import {
+  db,
+} from "../../../../config/firebase.js";
 
 import {
   createUserNotificationService,
@@ -14,6 +17,12 @@ const PLACE_SUBMISSIONS_COLLECTION =
 
 const PLACES_COLLECTION =
   "places";
+
+const ADMIN_USERS_COLLECTION =
+  "adminUsers";
+
+const ADMIN_WEEKLY_ACTIVITY_COLLECTION =
+  "weeklyActivity";
 
 const MIN_MAIN_PHOTO_WIDTH =
   1080;
@@ -139,7 +148,8 @@ function normalizePhoto(
       ) ||
       `photo_${index + 1}`,
 
-    order: index,
+    order:
+      index,
 
     source:
       "user",
@@ -149,11 +159,6 @@ function normalizePhoto(
 
     uploadedBy,
 
-    /*
-     * URL principal de uso general.
-     * Priorizamos medium para evitar cargar
-     * la original en feed o tarjetas.
-     */
     url:
       mediumUrl ||
       originalUrl ||
@@ -165,10 +170,6 @@ function normalizePhoto(
           photo?.path,
       ),
 
-    /*
-     * Estas dimensiones representan
-     * la variante medium usada como portada.
-     */
     widthPx:
       photo?.medium?.width ??
       photo?.medium?.widthPx ??
@@ -189,8 +190,7 @@ function getPhotoOriginalWidth(
   const width =
     Number(
       photo?.original?.width ??
-        photo?.original
-          ?.widthPx ??
+        photo?.original?.widthPx ??
         photo?.originalWidth ??
         photo?.originalWidthPx ??
         photo?.widthPx ??
@@ -210,8 +210,7 @@ function getPhotoOriginalHeight(
   const height =
     Number(
       photo?.original?.height ??
-        photo?.original
-          ?.heightPx ??
+        photo?.original?.heightPx ??
         photo?.originalHeight ??
         photo?.originalHeightPx ??
         photo?.heightPx ??
@@ -269,20 +268,11 @@ function selectMainPhotoSource(
     return null;
   }
 
-  /*
-   * Primero intentamos elegir únicamente
-   * entre fotos que cumplen 1080x720.
-   */
   const eligiblePhotos =
     photos.filter(
       meetsMainPhotoResolution,
     );
 
-  /*
-   * Para no romper propuestas antiguas:
-   * si ninguna cumple, seleccionamos entre
-   * todas las fotos disponibles.
-   */
   const candidates =
     eligiblePhotos.length > 0
       ? eligiblePhotos
@@ -298,8 +288,7 @@ function selectMainPhotoSource(
 
   for (
     let index = 1;
-    index <
-    candidates.length;
+    index < candidates.length;
     index += 1
   ) {
     const currentPhoto =
@@ -310,13 +299,6 @@ function selectMainPhotoSource(
         currentPhoto,
       );
 
-    /*
-     * Solo reemplazamos cuando la resolución
-     * es estrictamente mayor.
-     *
-     * En empate se conserva la primera foto
-     * según el orden original.
-     */
     if (
       currentResolution >
       selectedResolution
@@ -358,8 +340,7 @@ function buildMainPhoto(
   const thumbnailUrl =
     cleanString(
       thumbnail?.url ||
-        selectedPhoto
-          .thumbnailUrl,
+        selectedPhoto.thumbnailUrl,
     );
 
   return {
@@ -379,10 +360,6 @@ function buildMainPhoto(
     order:
       selectedPhoto.order,
 
-    /*
-     * mainPhoto usa medium como portada.
-     * Nunca priorizamos original aquí.
-     */
     url:
       mediumUrl ||
       thumbnailUrl ||
@@ -513,12 +490,47 @@ export default async function approvePlaceSubmissionService({
     );
   }
 
+  const normalizedApprovedBy =
+    cleanString(
+      approvedBy,
+    );
+
+  if (!normalizedApprovedBy) {
+    throw createServiceError(
+      "No se encontró el administrador que aprueba la propuesta.",
+      401,
+    );
+  }
+
+  const currentWeekId =
+    getCurrentWeekId();
+
   const submissionRef =
     db
       .collection(
         PLACE_SUBMISSIONS_COLLECTION,
       )
-      .doc(submissionId);
+      .doc(
+        submissionId,
+      );
+
+  const adminRef =
+    db
+      .collection(
+        ADMIN_USERS_COLLECTION,
+      )
+      .doc(
+        normalizedApprovedBy,
+      );
+
+  const adminWeeklyActivityRef =
+    adminRef
+      .collection(
+        ADMIN_WEEKLY_ACTIVITY_COLLECTION,
+      )
+      .doc(
+        currentWeekId,
+      );
 
   const approvalResult =
     await db.runTransaction(
@@ -641,21 +653,14 @@ export default async function approvePlaceSubmissionService({
             .doc();
 
         const approvedAtIso =
-          new Date().toISOString();
+          new Date()
+            .toISOString();
 
-        /*
-         * Elegimos la foto usando la calidad
-         * de la original.
-         */
         const selectedPhoto =
           selectMainPhotoSource(
             photos,
           );
 
-        /*
-         * Guardamos medium como mainPhoto
-         * para feed y portada.
-         */
         const mainPhoto =
           buildMainPhoto(
             selectedPhoto,
@@ -713,8 +718,7 @@ export default async function approvePlaceSubmissionService({
 
           priceRangeId:
             cleanString(
-              submission
-                .priceRangeId,
+              submission.priceRangeId,
             ),
 
           openingHours:
@@ -728,20 +732,19 @@ export default async function approvePlaceSubmissionService({
 
               days: [],
 
-              openTime: null,
+              openTime:
+                null,
 
-              closeTime: null,
+              closeTime:
+                null,
 
-              isOpenNow: false,
+              isOpenNow:
+                false,
 
               lastScheduleCheckAt:
                 null,
             },
 
-          /*
-           * Conservamos todas las variantes
-           * de cada foto para la galería.
-           */
           photos:
             photos.map(
               (photo) => ({
@@ -752,10 +755,6 @@ export default async function approvePlaceSubmissionService({
               }),
             ),
 
-          /*
-           * La portada usa medium y conserva
-           * thumbnail para listas pequeñas.
-           */
           mainPhoto,
 
           photoCount:
@@ -773,7 +772,7 @@ export default async function approvePlaceSubmissionService({
           activityStatus:
             "active",
 
-            activityCheckpoint:
+          activityCheckpoint:
             buildActivityCheckpoint(),
 
           source:
@@ -817,8 +816,7 @@ export default async function approvePlaceSubmissionService({
               null,
 
             approvedBy:
-              approvedBy ||
-              "admin_panel",
+              normalizedApprovedBy,
 
             approvedAt:
               now,
@@ -840,14 +838,50 @@ export default async function approvePlaceSubmissionService({
               now,
 
             approvedBy:
-              approvedBy ||
-              "admin_panel",
+              normalizedApprovedBy,
 
             createdPlaceId:
               placeRef.id,
 
             updatedAt:
               now,
+          },
+        );
+
+        transaction.set(
+          adminRef,
+          {
+            approvedPlaceSubmissionsCount:
+              admin.firestore
+                .FieldValue
+                .increment(1),
+
+            updatedAt:
+              now,
+          },
+          {
+            merge:
+              true,
+          },
+        );
+
+        transaction.set(
+          adminWeeklyActivityRef,
+          {
+            weekId:
+              currentWeekId,
+
+            approvedPlaceSubmissionsCount:
+              admin.firestore
+                .FieldValue
+                .increment(1),
+
+            updatedAt:
+              now,
+          },
+          {
+            merge:
+              true,
           },
         );
 
@@ -863,6 +897,12 @@ export default async function approvePlaceSubmissionService({
           createdBy:
             submission.createdBy ||
             null,
+
+          approvedBy:
+            normalizedApprovedBy,
+
+          weekId:
+            currentWeekId,
 
           placeName:
             cleanString(
@@ -970,5 +1010,11 @@ export default async function approvePlaceSubmissionService({
 
     status:
       approvalResult.status,
+
+    approvedBy:
+      approvalResult.approvedBy,
+
+    weekId:
+      approvalResult.weekId,
   };
 }
