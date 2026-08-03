@@ -38,6 +38,9 @@ import togglePlaceLikeController from "../../controllers/places/interactions/tog
 import startPlaceDwellSessionController from "../../controllers/places/interactions/startPlaceDwellSession.controller.js";
 import closePlaceDwellSessionController from "../../controllers/places/interactions/closePlaceDwellSession.controller.js";
 
+
+import rejectGooglePlaceCandidateController from "../../controllers/places/update/rejectGooglePlaceCandidate.controller.js";
+
 const router = Router();
 
 /**
@@ -106,6 +109,9 @@ router.patch("/admin/:placeId/reports/:reportId/resolve",verifyFirebaseToken,res
 router.patch("/admin/:placeId/moderation",verifyFirebaseToken,moderateAdminPlaceController);
 
 router.post("/jobs/activity-checkpoints/reset",resetPlacesActivityCheckpointsController);
+
+
+router.post("/admin/google-places/register-from-candidate",verifyFirebaseToken,verifyActiveAdmin,registerPlaceFromCandidateController);
 
 
 
