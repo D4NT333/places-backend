@@ -14,7 +14,8 @@ const SUBMISSION_STATUS_LABELS = {
   resubmitted: "Reenviado",
   approved: "Aprobado",
   rejected: "Rechazado",
-  pending_delete: "Eliminación solicitada",
+  pending_delete:
+    "Eliminación solicitada",
 };
 
 const WEEK_DAYS = [
@@ -30,17 +31,20 @@ const WEEK_DAYS = [
 const ACTIVITY_COLLECTIONS = [
   {
     type: "place",
-    collectionName: "placeSubmissions",
+    collectionName:
+      "placeSubmissions",
     userField: "createdBy",
   },
   {
     type: "description",
-    collectionName: "descriptionSubmissions",
+    collectionName:
+      "descriptionSubmissions",
     userField: "createdBy.uid",
   },
   {
     type: "photo",
-    collectionName: "photoSubmissions",
+    collectionName:
+      "photoSubmissions",
     userField: "createdBy",
   },
   {
@@ -50,11 +54,31 @@ const ACTIVITY_COLLECTIONS = [
   },
 ];
 
+const APP_TIME_ZONE =
+  "America/Mexico_City";
+
+/*
+ * Ciudad de México y Guadalajara
+ * utilizan UTC-06:00.
+ *
+ * Esto permite construir el inicio real
+ * de cada fecha a las 00:00 en México,
+ * aunque el servidor esté ejecutándose
+ * en UTC.
+ */
+const APP_TIME_ZONE_OFFSET =
+  "-06:00";
+
 function serializeDate(value) {
   if (!value) return null;
 
-  if (typeof value.toDate === "function") {
-    return value.toDate().toISOString();
+  if (
+    typeof value.toDate ===
+    "function"
+  ) {
+    return value
+      .toDate()
+      .toISOString();
   }
 
   if (value instanceof Date) {
@@ -67,7 +91,10 @@ function serializeDate(value) {
 function toDate(value) {
   if (!value) return null;
 
-  if (typeof value.toDate === "function") {
+  if (
+    typeof value.toDate ===
+    "function"
+  ) {
     return value.toDate();
   }
 
@@ -77,7 +104,158 @@ function toDate(value) {
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function getMexicoDateParts(
+  value = new Date()
+) {
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return null;
+  }
+
+  const formatter =
+    new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone:
+          APP_TIME_ZONE,
+
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }
+    );
+
+  const parts =
+    formatter.formatToParts(
+      date
+    );
+
+  const year = Number(
+    parts.find(
+      (part) =>
+        part.type === "year"
+    )?.value
+  );
+
+  const month = Number(
+    parts.find(
+      (part) =>
+        part.type === "month"
+    )?.value
+  );
+
+  const day = Number(
+    parts.find(
+      (part) =>
+        part.type === "day"
+    )?.value
+  );
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
+    return null;
+  }
+
+  return {
+    year,
+    month,
+    day,
+  };
+}
+
+function buildDateId({
+  year,
+  month,
+  day,
+}) {
+  const normalizedMonth =
+    String(month).padStart(
+      2,
+      "0"
+    );
+
+  const normalizedDay =
+    String(day).padStart(
+      2,
+      "0"
+    );
+
+  return `${year}-${normalizedMonth}-${normalizedDay}`;
+}
+
+function createMexicoMidnightDate({
+  year,
+  month,
+  day,
+}) {
+  const dateId = buildDateId({
+    year,
+    month,
+    day,
+  });
+
+  return new Date(
+    `${dateId}T00:00:00.000${APP_TIME_ZONE_OFFSET}`
+  );
+}
+
+function createMexicoMidnightFromId(
+  value
+) {
+  const match =
+    String(value || "")
+      .trim()
+      .match(
+        /^(\d{4})-(\d{2})-(\d{2})$/
+      );
+
+  if (!match) {
+    return null;
+  }
+
+  const year =
+    Number(match[1]);
+
+  const month =
+    Number(match[2]);
+
+  const day =
+    Number(match[3]);
+
+  const date =
+    createMexicoMidnightDate({
+      year,
+      month,
+      day,
+    });
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
     return null;
   }
 
@@ -85,84 +263,157 @@ function toDate(value) {
 }
 
 function formatDateOnly(date) {
-  const year = date.getFullYear();
+  const parts =
+    getMexicoDateParts(date);
 
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, "0");
-
-  const day = String(
-    date.getDate()
-  ).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function getMondayFromDate(value) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
+  if (!parts) {
     return null;
   }
 
-  date.setHours(0, 0, 0, 0);
+  return buildDateId(parts);
+}
 
-  const currentDay = date.getDay();
+function getMexicoDayIndex(
+  value
+) {
+  const parts =
+    getMexicoDateParts(value);
+
+  if (!parts) {
+    return null;
+  }
+
+  /*
+   * Se usa mediodía UTC únicamente
+   * para calcular el día de la semana
+   * de la fecha civil mexicana sin
+   * desplazamientos de zona horaria.
+   */
+  const stableDate =
+    new Date(
+      Date.UTC(
+        parts.year,
+        parts.month - 1,
+        parts.day,
+        12,
+        0,
+        0,
+        0
+      )
+    );
+
+  return stableDate.getUTCDay();
+}
+
+function getMondayFromDate(value) {
+  const parts =
+    getMexicoDateParts(value);
+
+  if (!parts) {
+    return null;
+  }
+
+  const stableDate =
+    new Date(
+      Date.UTC(
+        parts.year,
+        parts.month - 1,
+        parts.day,
+        12,
+        0,
+        0,
+        0
+      )
+    );
+
+  const currentDay =
+    stableDate.getUTCDay();
 
   const daysSinceMonday =
     currentDay === 0
       ? 6
       : currentDay - 1;
 
-  date.setDate(
-    date.getDate() - daysSinceMonday
+  stableDate.setUTCDate(
+    stableDate.getUTCDate() -
+      daysSinceMonday
   );
 
-  return date;
+  return createMexicoMidnightDate({
+    year:
+      stableDate.getUTCFullYear(),
+
+    month:
+      stableDate.getUTCMonth() +
+      1,
+
+    day:
+      stableDate.getUTCDate(),
+  });
 }
 
 function getCurrentWeekStart() {
-  return getMondayFromDate(new Date());
+  /*
+   * new Date() representa el instante
+   * actual, pero getMondayFromDate
+   * lo interpreta con la zona horaria
+   * America/Mexico_City.
+   *
+   * Por eso el cambio de semana ocurre
+   * hasta las 00:00 reales de México.
+   */
+  return getMondayFromDate(
+    new Date()
+  );
 }
 
-function normalizeSelectedWeekStart(value) {
+function normalizeSelectedWeekStart(
+  value
+) {
   if (!value) {
     return getCurrentWeekStart();
   }
 
-  const parsedDate = new Date(
-    `${value}T00:00:00`
-  );
+  const parsedDate =
+    createMexicoMidnightFromId(
+      value
+    );
 
-  if (Number.isNaN(parsedDate.getTime())) {
+  if (!parsedDate) {
     return getCurrentWeekStart();
   }
 
-  return getMondayFromDate(parsedDate);
+  return getMondayFromDate(
+    parsedDate
+  );
 }
 
-function getWeekRange(weekStartValue) {
+function getWeekRange(
+  weekStartValue
+) {
   const start =
-    normalizeSelectedWeekStart(weekStartValue);
+    normalizeSelectedWeekStart(
+      weekStartValue
+    );
 
-  const endExclusive = new Date(start);
+  const endExclusive =
+    new Date(start);
 
-  endExclusive.setDate(
-    endExclusive.getDate() + 7
+  endExclusive.setUTCDate(
+    endExclusive.getUTCDate() +
+      7
   );
 
-  const endInclusive = new Date(start);
-
-  endInclusive.setDate(
-    endInclusive.getDate() + 6
-  );
-
-  endInclusive.setHours(
-    23,
-    59,
-    59,
-    999
-  );
+  /*
+   * El final inclusivo es exactamente
+   * un milisegundo antes del inicio
+   * de la siguiente semana.
+   */
+  const endInclusive =
+    new Date(
+      endExclusive.getTime() -
+        1
+    );
 
   return {
     start,
@@ -184,15 +435,21 @@ function isDateInsideWeek(
   );
 }
 
-function getInitials(name = "", email = "") {
-  const cleanName = name?.trim();
+function getInitials(
+  name = "",
+  email = ""
+) {
+  const cleanName =
+    name?.trim();
 
   if (cleanName) {
     const words = cleanName
       .split(" ")
       .filter(Boolean);
 
-    if (words.length === 1) {
+    if (
+      words.length === 1
+    ) {
       return words[0]
         .slice(0, 2)
         .toUpperCase();
@@ -202,7 +459,8 @@ function getInitials(name = "", email = "") {
       .toUpperCase();
   }
 
-  const cleanEmail = email?.trim();
+  const cleanEmail =
+    email?.trim();
 
   if (cleanEmail) {
     return cleanEmail
@@ -214,24 +472,43 @@ function getInitials(name = "", email = "") {
   return "US";
 }
 
-function normalizeUserStatus(status) {
-  if (USER_STATUS_LABELS[status]) {
+function normalizeUserStatus(
+  status
+) {
+  if (
+    USER_STATUS_LABELS[
+      status
+    ]
+  ) {
     return status;
   }
 
   return "active";
 }
 
-function normalizeSubmissionStatus(status) {
-  if (SUBMISSION_STATUS_LABELS[status]) {
+function normalizeSubmissionStatus(
+  status
+) {
+  if (
+    SUBMISSION_STATUS_LABELS[
+      status
+    ]
+  ) {
     return status;
   }
 
   return "in_review";
 }
 
-function getUserStatusLabel(status) {
-  return USER_STATUS_LABELS[status] || "Activo";
+function getUserStatusLabel(
+  status
+) {
+  return (
+    USER_STATUS_LABELS[
+      status
+    ] ||
+    "Activo"
+  );
 }
 
 function normalizeUser(doc) {
@@ -246,15 +523,24 @@ function normalizeUser(doc) {
     "Sin correo";
 
   const status =
-    normalizeUserStatus(data.status);
+    normalizeUserStatus(
+      data.status
+    );
 
   return {
     id: doc.id,
-    uid: data.uid || doc.id,
+    uid:
+      data.uid ||
+      doc.id,
 
     name,
     email,
-    initials: getInitials(name, email),
+
+    initials:
+      getInitials(
+        name,
+        email
+      ),
 
     photoURL:
       data.photoURL ||
@@ -265,7 +551,8 @@ function normalizeUser(doc) {
       null,
 
     providerLabel:
-      data.provider === "google.com"
+      data.provider ===
+      "google.com"
         ? "Google"
         : data.provider ||
           "Sin proveedor",
@@ -276,8 +563,11 @@ function normalizeUser(doc) {
       "Sin perfil",
 
     status,
+
     statusLabel:
-      getUserStatusLabel(status),
+      getUserStatusLabel(
+        status
+      ),
 
     birthday:
       data.birthday ||
@@ -285,20 +575,31 @@ function normalizeUser(doc) {
       null,
 
     emailVerified:
-      Boolean(data.emailVerified),
+      Boolean(
+        data.emailVerified
+      ),
 
     createdAt:
-      serializeDate(data.createdAt),
+      serializeDate(
+        data.createdAt
+      ),
 
     updatedAt:
-      serializeDate(data.updatedAt),
+      serializeDate(
+        data.updatedAt
+      ),
 
     lastLoginAt:
-      serializeDate(data.lastLoginAt),
+      serializeDate(
+        data.lastLoginAt
+      ),
   };
 }
 
-function normalizeActivityItem(doc, type) {
+function normalizeActivityItem(
+  doc,
+  type
+) {
   const data = doc.data();
 
   const createdAt =
@@ -313,7 +614,8 @@ function normalizeActivityItem(doc, type) {
 
     status:
       type === "report"
-        ? data.status || "pending"
+        ? data.status ||
+          "pending"
         : normalizeSubmissionStatus(
             data.status
           ),
@@ -332,17 +634,30 @@ async function getActivityItems({
 }) {
   const snapshot = await db
     .collection(collectionName)
-    .where(userField, "==", userId)
-    .orderBy("createdAt", "desc")
+    .where(
+      userField,
+      "==",
+      userId
+    )
+    .orderBy(
+      "createdAt",
+      "desc"
+    )
     .limit(limit)
     .get();
 
-  return snapshot.docs.map((doc) =>
-    normalizeActivityItem(doc, type)
+  return snapshot.docs.map(
+    (doc) =>
+      normalizeActivityItem(
+        doc,
+        type
+      )
   );
 }
 
-function buildWeeklyActivity(items) {
+function buildWeeklyActivity(
+  items
+) {
   const days = {
     Lun: {
       label: "Lun",
@@ -352,6 +667,7 @@ function buildWeeklyActivity(items) {
       photos: 0,
       reports: 0,
     },
+
     Mar: {
       label: "Mar",
       value: 0,
@@ -360,6 +676,7 @@ function buildWeeklyActivity(items) {
       photos: 0,
       reports: 0,
     },
+
     Mié: {
       label: "Mié",
       value: 0,
@@ -368,6 +685,7 @@ function buildWeeklyActivity(items) {
       photos: 0,
       reports: 0,
     },
+
     Jue: {
       label: "Jue",
       value: 0,
@@ -376,6 +694,7 @@ function buildWeeklyActivity(items) {
       photos: 0,
       reports: 0,
     },
+
     Vie: {
       label: "Vie",
       value: 0,
@@ -384,6 +703,7 @@ function buildWeeklyActivity(items) {
       photos: 0,
       reports: 0,
     },
+
     Sáb: {
       label: "Sáb",
       value: 0,
@@ -392,6 +712,7 @@ function buildWeeklyActivity(items) {
       photos: 0,
       reports: 0,
     },
+
     Dom: {
       label: "Dom",
       value: 0,
@@ -403,16 +724,32 @@ function buildWeeklyActivity(items) {
   };
 
   items.forEach((item) => {
-    if (!item.createdAtDate) {
+    if (
+      !item.createdAtDate
+    ) {
+      return;
+    }
+
+    const dayIndex =
+      getMexicoDayIndex(
+        item.createdAtDate
+      );
+
+    if (
+      dayIndex === null
+    ) {
       return;
     }
 
     const dayLabel =
-      WEEK_DAYS[
-        item.createdAtDate.getDay()
-      ];
+      WEEK_DAYS[dayIndex];
 
-    const day = days[dayLabel];
+    const day =
+      days[dayLabel];
+
+    if (!day) {
+      return;
+    }
 
     day.value += 1;
 
@@ -449,9 +786,15 @@ function buildWeeklyActivity(items) {
   ];
 }
 
-function countByStatus(items, statuses) {
-  return items.filter((item) =>
-    statuses.includes(item.status)
+function countByStatus(
+  items,
+  statuses
+) {
+  return items.filter(
+    (item) =>
+      statuses.includes(
+        item.status
+      )
   ).length;
 }
 
@@ -459,18 +802,23 @@ function buildAvailableWeeks(
   items,
   maximumWeeks = 12
 ) {
-  const weekMap = new Map();
+  const weekMap =
+    new Map();
 
   const currentWeekStart =
     getCurrentWeekStart();
 
   weekMap.set(
-    formatDateOnly(currentWeekStart),
+    formatDateOnly(
+      currentWeekStart
+    ),
     currentWeekStart
   );
 
   items.forEach((item) => {
-    if (!item.createdAtDate) {
+    if (
+      !item.createdAtDate
+    ) {
       return;
     }
 
@@ -484,10 +832,17 @@ function buildAvailableWeeks(
     }
 
     const key =
-      formatDateOnly(weekStart);
+      formatDateOnly(
+        weekStart
+      );
 
-    if (!weekMap.has(key)) {
-      weekMap.set(key, weekStart);
+    if (
+      !weekMap.has(key)
+    ) {
+      weekMap.set(
+        key,
+        weekStart
+      );
     }
   });
 
@@ -496,19 +851,32 @@ function buildAvailableWeeks(
   )
     .sort(
       (a, b) =>
-        b.getTime() - a.getTime()
+        b.getTime() -
+        a.getTime()
     )
-    .slice(0, maximumWeeks)
+    .slice(
+      0,
+      maximumWeeks
+    )
     .map((start) => {
-      const end = new Date(start);
+      const end =
+        new Date(start);
 
-      end.setDate(
-        end.getDate() + 6
+      end.setUTCDate(
+        end.getUTCDate() +
+          6
       );
 
       return {
-        start: formatDateOnly(start),
-        end: formatDateOnly(end),
+        start:
+          formatDateOnly(
+            start
+          ),
+
+        end:
+          formatDateOnly(
+            end
+          ),
       };
     });
 }
@@ -523,16 +891,18 @@ export default async function getAdminUserDetailService({
     .get();
 
   if (!userDoc.exists) {
-    const error = new Error(
-      "El usuario no existe."
-    );
+    const error =
+      new Error(
+        "El usuario no existe."
+      );
 
     error.statusCode = 404;
 
     throw error;
   }
 
-  const user = normalizeUser(userDoc);
+  const user =
+    normalizeUser(userDoc);
 
   const [
     placeItems,
@@ -570,15 +940,18 @@ export default async function getAdminUserDetailService({
     start,
     endExclusive,
     endInclusive,
-  } = getWeekRange(weekStart);
+  } = getWeekRange(
+    weekStart
+  );
 
   const selectedWeekItems =
-    allActivityItems.filter((item) =>
-      isDateInsideWeek(
-        item.createdAtDate,
-        start,
-        endExclusive
-      )
+    allActivityItems.filter(
+      (item) =>
+        isDateInsideWeek(
+          item.createdAtDate,
+          start,
+          endExclusive
+        )
     );
 
   const selectedPlaces =
@@ -590,7 +963,8 @@ export default async function getAdminUserDetailService({
   const selectedDescriptions =
     selectedWeekItems.filter(
       (item) =>
-        item.type === "description"
+        item.type ===
+        "description"
     );
 
   const selectedPhotos =
@@ -606,12 +980,12 @@ export default async function getAdminUserDetailService({
     );
 
   /*
-    Los reportes no usan los estados
-    approved, rejected, returned, etc.
-
-    Por eso estos tres conteos se calculan
-    solamente con propuestas.
-  */
+   * Los reportes no usan los estados
+   * approved, rejected, returned, etc.
+   *
+   * Por eso estos conteos se calculan
+   * solamente con propuestas.
+   */
   const selectedSubmissions =
     selectedWeekItems.filter(
       (item) =>
@@ -664,9 +1038,9 @@ export default async function getAdminUserDetailService({
 
     activity: {
       /*
-        Estos valores corresponden
-        a la semana seleccionada.
-      */
+       * Estos valores corresponden
+       * a la semana seleccionada.
+       */
       totalContributions:
         selectedWeekItems.length,
 
@@ -690,7 +1064,9 @@ export default async function getAdminUserDetailService({
 
       selectedWeek: {
         start:
-          formatDateOnly(start),
+          formatDateOnly(
+            start
+          ),
 
         end:
           formatDateOnly(
@@ -701,10 +1077,10 @@ export default async function getAdminUserDetailService({
       availableWeeks,
 
       /*
-        Los dejamos disponibles por si
-        después quieres mostrar también
-        los totales históricos.
-      */
+       * Los dejamos disponibles por si
+       * después quieres mostrar también
+       * los totales históricos.
+       */
       historicalTotals: {
         totalContributions:
           allActivityItems.length,
