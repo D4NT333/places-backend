@@ -3,7 +3,10 @@ import {
   Timestamp,
 } from "firebase-admin/firestore";
 
-import { db } from "../../../config/firebase.js";
+import {
+  auth,
+  db,
+} from "../../../config/firebase.js";
 
 const PLACES_COLLECTION = "places";
 const USERS_COLLECTION = "user";
@@ -170,64 +173,196 @@ function normalizeUserIds(userIds) {
   ];
 }
 
-async function getPeopleByIds(userIds) {
-  const normalizedIds = normalizeUserIds(userIds);
-
-  if (normalizedIds.length === 0) {
+async function getAuthenticationUsersMap(
+  userIds,
+) {
+  if (
+    !Array.isArray(userIds) ||
+    userIds.length === 0
+  ) {
     return new Map();
   }
 
-  const userReferences = normalizedIds.map((userId) =>
-    db.collection(USERS_COLLECTION).doc(userId)
+  const result =
+    await auth.getUsers(
+      userIds.map(
+        (uid) => ({
+          uid,
+        }),
+      ),
+    );
+
+  const authenticationUsersMap =
+    new Map();
+
+  result.users.forEach(
+    (userRecord) => {
+      authenticationUsersMap.set(
+        userRecord.uid,
+        userRecord,
+      );
+    },
   );
 
-  const adminReferences = normalizedIds.map((userId) =>
-    db.collection(ADMIN_USERS_COLLECTION).doc(userId)
-  );
+  return authenticationUsersMap;
+}
+
+async function getPeopleByIds(
+  userIds,
+) {
+  const normalizedIds =
+    normalizeUserIds(
+      userIds,
+    );
+
+  if (
+    normalizedIds.length === 0
+  ) {
+    return new Map();
+  }
+
+  const userReferences =
+    normalizedIds.map(
+      (userId) =>
+        db
+          .collection(
+            USERS_COLLECTION,
+          )
+          .doc(
+            userId,
+          ),
+    );
+
+  const adminReferences =
+    normalizedIds.map(
+      (userId) =>
+        db
+          .collection(
+            ADMIN_USERS_COLLECTION,
+          )
+          .doc(
+            userId,
+          ),
+    );
 
   const [
     userSnapshots,
     adminSnapshots,
+    authenticationUsersMap,
   ] = await Promise.all([
-    db.getAll(...userReferences),
-    db.getAll(...adminReferences),
+    db.getAll(
+      ...userReferences,
+    ),
+
+    db.getAll(
+      ...adminReferences,
+    ),
+
+    getAuthenticationUsersMap(
+      normalizedIds,
+    ),
   ]);
 
-  const peopleMap = new Map();
+  const peopleMap =
+    new Map();
 
-  userSnapshots.forEach((snapshot) => {
-    if (!snapshot.exists) {
-      return;
-    }
+  userSnapshots.forEach(
+    (snapshot) => {
+      if (
+        !snapshot.exists
+      ) {
+        return;
+      }
 
-    const displayName = getDisplayName(snapshot.data());
+      const data =
+        snapshot.data() ||
+        {};
 
-    if (!displayName) {
-      return;
-    }
+      const authenticationUser =
+        authenticationUsersMap.get(
+          snapshot.id,
+        );
 
-    peopleMap.set(snapshot.id, {
-      uid: snapshot.id,
-      name: displayName,
-      type: "user",
-    });
-  });
+      const displayName =
+        getDisplayName(
+          data,
+        ) ||
+        authenticationUser
+          ?.displayName ||
+        "Usuario";
 
-  adminSnapshots.forEach((snapshot) => {
-    if (!snapshot.exists) {
-      return;
-    }
+      const photoURL =
+        data.photoURL ||
+        authenticationUser
+          ?.photoURL ||
+        null;
 
-    const displayName =
-      getDisplayName(snapshot.data()) ||
-      "Administrador";
+      peopleMap.set(
+        snapshot.id,
+        {
+          uid:
+            snapshot.id,
 
-    peopleMap.set(snapshot.id, {
-      uid: snapshot.id,
-      name: displayName,
-      type: "admin",
-    });
-  });
+          name:
+            displayName,
+
+          photoURL,
+
+          type:
+            "user",
+        },
+      );
+    },
+  );
+
+  adminSnapshots.forEach(
+    (snapshot) => {
+      if (
+        !snapshot.exists
+      ) {
+        return;
+      }
+
+      const data =
+        snapshot.data() ||
+        {};
+
+      const authenticationUser =
+        authenticationUsersMap.get(
+          snapshot.id,
+        );
+
+      const displayName =
+        getDisplayName(
+          data,
+        ) ||
+        authenticationUser
+          ?.displayName ||
+        "Administrador";
+
+      const photoURL =
+        data.photoURL ||
+        authenticationUser
+          ?.photoURL ||
+        null;
+
+      peopleMap.set(
+        snapshot.id,
+        {
+          uid:
+            snapshot.id,
+
+          name:
+            displayName,
+
+          photoURL,
+
+          type:
+            "admin",
+        },
+      );
+    },
+  );
 
   return peopleMap;
 }
@@ -239,28 +374,56 @@ function resolvePerson({
 }) {
   if (!userId) {
     return {
-      uid: null,
-      name: fallbackName,
-      type: null,
+      uid:
+        null,
+
+      name:
+        fallbackName,
+
+      photoURL:
+        null,
+
+      type:
+        null,
     };
   }
 
   if (
-    userId === "admin_panel" ||
-    userId === "admin_uid_or_system"
+    userId ===
+      "admin_panel" ||
+    userId ===
+      "admin_uid_or_system"
   ) {
     return {
-      uid: userId,
-      name: "Administrador",
-      type: "admin",
+      uid:
+        userId,
+
+      name:
+        "Administrador",
+
+      photoURL:
+        null,
+
+      type:
+        "admin",
     };
   }
 
   return (
-    peopleMap.get(userId) || {
-      uid: userId,
-      name: fallbackName,
-      type: null,
+    peopleMap.get(
+      userId,
+    ) || {
+      uid:
+        userId,
+
+      name:
+        fallbackName,
+
+      photoURL:
+        null,
+
+      type:
+        null,
     }
   );
 }
@@ -282,18 +445,74 @@ function getApprovedById(place) {
   );
 }
 
+function getPublicApiUrl() {
+  const publicApiUrl =
+    process.env.PUBLIC_API_URL?.trim();
+
+  if (!publicApiUrl) {
+    return "";
+  }
+
+  return publicApiUrl.replace(
+    /\/+$/,
+    "",
+  );
+}
+
+function buildGooglePhotoUrl(
+  photoReference,
+) {
+  if (
+    typeof photoReference !==
+      "string" ||
+    !photoReference.trim()
+  ) {
+    return null;
+  }
+
+  const encodedReference =
+    encodeURIComponent(
+      photoReference.trim(),
+    );
+
+  const relativeUrl =
+    `/api/places/feed-photo/google?photoName=${encodedReference}`;
+
+  const publicApiUrl =
+    getPublicApiUrl();
+
+  return publicApiUrl
+    ? `${publicApiUrl}${relativeUrl}`
+    : relativeUrl;
+}
+
 function getMainPhotoUrl(place) {
-  return (
+  const directUrl =
     place.mainPhoto?.url ||
     place.mainPhoto?.medium?.url ||
     place.mainPhoto?.thumbnail?.url ||
     place.photos?.[0]?.url ||
     place.photos?.[0]?.medium?.url ||
     place.photos?.[0]?.thumbnail?.url ||
-    null
-  );
-}
+    null;
 
+  if (directUrl) {
+    return directUrl;
+  }
+
+  const googlePhotoReference =
+    place.mainPhoto?.reference ||
+    place.photos?.[0]?.reference ||
+    null;
+
+  if (googlePhotoReference) {
+    return buildGooglePhotoUrl(
+      googlePhotoReference,
+    );
+  }
+
+  return null;
+}
 export default async function getAdminPlacesService({
   limit,
   cursor,
