@@ -1,6 +1,11 @@
 import admin from "firebase-admin";
 
 import {
+  cellToParent,
+  latLngToCell,
+} from "h3-js";
+
+import {
   db,
 } from "../../../../config/firebase.js";
 
@@ -29,6 +34,12 @@ const MIN_MAIN_PHOTO_WIDTH =
 
 const MIN_MAIN_PHOTO_HEIGHT =
   720;
+
+  const PLACE_H3_RESOLUTION =
+  9;
+
+const PARENT_H3_RESOLUTION =
+  7;
 
 function createServiceError(
   message,
@@ -579,6 +590,19 @@ export default async function approvePlaceSubmissionService({
           );
         }
 
+        const placeHexId =
+  latLngToCell(
+    location.lat,
+    location.lng,
+    PLACE_H3_RESOLUTION,
+  );
+
+const parentHexId =
+  cellToParent(
+    placeHexId,
+    PARENT_H3_RESOLUTION,
+  );
+
         const photos =
           Array.isArray(
             submission.photos,
@@ -694,6 +718,13 @@ export default async function approvePlaceSubmissionService({
             ),
 
           location,
+
+          placeHexId,
+
+parentHexId,
+
+h3Resolution:
+  PLACE_H3_RESOLUTION,
 
           tagId:
             cleanString(
