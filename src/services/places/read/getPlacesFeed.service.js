@@ -20,7 +20,7 @@ function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-const GOOGLE_FEED_PHOTO_MAX_WIDTH = 1080;
+const GOOGLE_FEED_PHOTO_MAX_WIDTH = 640;
 const GOOGLE_THUMBNAIL_MAX_WIDTH = 240;
 
 function getPublicApiUrl() {
@@ -244,45 +244,152 @@ function normalizeUserRatingCount(place) {
   return 0;
 }
 
-async function getSubtagLabelById(subtagId) {
-  const cleanSubtagId = cleanText(subtagId);
+// async function getSubtagLabelById(subtagId) {
+//   const cleanSubtagId = cleanText(subtagId);
 
-  if (!cleanSubtagId) return "";
+//   if (!cleanSubtagId) return "";
 
-  try {
-    const subtagDoc = await db
-      .collection(SUBTAGS_COLLECTION)
-      .doc(cleanSubtagId)
-      .get();
+//   try {
+//     const subtagDoc = await db
+//       .collection(SUBTAGS_COLLECTION)
+//       .doc(cleanSubtagId)
+//       .get();
 
-    if (!subtagDoc.exists) {
-      return cleanSubtagId;
-    }
+//     if (!subtagDoc.exists) {
+//       return cleanSubtagId;
+//     }
 
-    const subtag = subtagDoc.data();
+//     const subtag = subtagDoc.data();
 
-    return (
-      cleanText(subtag.label) ||
-      cleanText(subtag.name) ||
-      cleanText(subtag.title) ||
-      cleanSubtagId
-    );
-  } catch (error) {
-    console.error("Error obteniendo label de subtag:", error);
-    return cleanSubtagId;
+//     return (
+//       cleanText(subtag.label) ||
+//       cleanText(subtag.name) ||
+//       cleanText(subtag.title) ||
+//       cleanSubtagId
+//     );
+//   } catch (error) {
+//     console.error("Error obteniendo label de subtag:", error);
+//     return cleanSubtagId;
+//   }
+// }
+
+// async function normalizeSubtagsWithLabels(subtags) {
+//   const cleanSubtags = normalizeStringArray(subtags);
+
+//   if (cleanSubtags.length === 0) return [];
+
+//   const subtagLabels = await Promise.all(
+//     cleanSubtags.map((subtagId) => getSubtagLabelById(subtagId))
+//   );
+
+//   return subtagLabels.map(cleanText).filter(Boolean);
+// }
+
+
+async function getSubtagLabelsMap(
+  subtagIds,
+) {
+  const uniqueSubtagIds =
+    [
+      ...new Set(
+        normalizeStringArray(
+          subtagIds,
+        ),
+      ),
+    ];
+
+  if (
+    uniqueSubtagIds.length ===
+    0
+  ) {
+    return new Map();
   }
-}
 
-async function normalizeSubtagsWithLabels(subtags) {
-  const cleanSubtags = normalizeStringArray(subtags);
+  const snapshots =
+    await Promise.all(
+      uniqueSubtagIds.map(
+        (
+          subtagId,
+        ) =>
+          db
+            .collection(
+              SUBTAGS_COLLECTION,
+            )
+            .doc(
+              subtagId,
+            )
+            .get(),
+      ),
+    );
 
-  if (cleanSubtags.length === 0) return [];
+  const labelsMap =
+    new Map();
 
-  const subtagLabels = await Promise.all(
-    cleanSubtags.map((subtagId) => getSubtagLabelById(subtagId))
+  snapshots.forEach(
+    (
+      snapshot,
+      index,
+    ) => {
+      const subtagId =
+        uniqueSubtagIds[
+          index
+        ];
+
+      if (
+        !snapshot.exists
+      ) {
+        labelsMap.set(
+          subtagId,
+          subtagId,
+        );
+
+        return;
+      }
+
+      const data =
+        snapshot.data();
+
+      labelsMap.set(
+        subtagId,
+        cleanText(
+          data?.label,
+        ) ||
+          cleanText(
+            data?.name,
+          ) ||
+          cleanText(
+            data?.title,
+          ) ||
+          subtagId,
+      );
+    },
   );
 
-  return subtagLabels.map(cleanText).filter(Boolean);
+  return labelsMap;
+}
+
+function normalizeSubtagsWithLabels(
+  subtags,
+  subtagLabelsMap,
+) {
+  return normalizeStringArray(
+    subtags,
+  )
+    .map(
+      (
+        subtagId,
+      ) =>
+        subtagLabelsMap.get(
+          subtagId,
+        ) ||
+        subtagId,
+    )
+    .map(
+      cleanText,
+    )
+    .filter(
+      Boolean,
+    );
 }
 
 function buildHomeTags({ tagLabel, subtags }) {
@@ -297,55 +404,123 @@ function buildHomeTags({ tagLabel, subtags }) {
     .filter(Boolean);
 }
 
-async function mapPlaceForFeed(doc) {
-  const place = doc.data();
+function mapPlaceForFeed(
+  doc,
+  subtagLabelsMap,
+) {
+  const place =
+    doc.data();
 
-  const subtagsWithLabels = await normalizeSubtagsWithLabels(place.subtags);
-  const tagLabel = cleanText(place.tagLabel);
+  const subtagsWithLabels =
+    normalizeSubtagsWithLabels(
+      place.subtags,
+      subtagLabelsMap,
+    );
+
+  const tagLabel =
+    cleanText(
+      place.tagLabel,
+    );
 
   return {
-    id: doc.id,
-    placeId: cleanText(place.placeId) || doc.id,
+    id:
+      doc.id,
 
-    name: cleanText(place.name),
+    placeId:
+      cleanText(
+        place.placeId,
+      ) ||
+      doc.id,
 
-    mainPhoto: normalizeMainPhoto(place.mainPhoto),
+    name:
+      cleanText(
+        place.name,
+      ),
 
-    rating: normalizeRating(place),
-    userRatingCount: normalizeUserRatingCount(place),
+    mainPhoto:
+      normalizeMainPhoto(
+        place.mainPhoto,
+      ),
 
-    tagId: cleanText(place.tagId),
+    rating:
+      normalizeRating(
+        place,
+      ),
+
+    userRatingCount:
+      normalizeUserRatingCount(
+        place,
+      ),
+
+    tagId:
+      cleanText(
+        place.tagId,
+      ),
+
     tagLabel,
 
-    // Aquí van TODOS los subtags ya traducidos.
-    subtags: subtagsWithLabels,
+    subtags:
+      subtagsWithLabels,
 
-    // Esto se queda, pero Home no lo usará.
-    approaches: normalizeStringArray(place.approaches),
+    approaches:
+      normalizeStringArray(
+        place.approaches,
+      ),
 
-    // Esto es lo que debe usar la card del Home.
-    // Máximo: tag principal + 2 subtags.
-    tags: buildHomeTags({
-      tagLabel,
-      subtags: subtagsWithLabels,
-    }),
+    tags:
+      buildHomeTags({
+        tagLabel,
 
-    openingHoursLabel: cleanText(place.openingHours?.label),
-    isOpenNow: Boolean(place.openingHours?.isOpenNow),
+        subtags:
+          subtagsWithLabels,
+      }),
 
-    priceRangeId: cleanText(place.priceRangeId),
+    openingHoursLabel:
+      cleanText(
+        place.openingHours
+          ?.label,
+      ),
+
+    isOpenNow:
+      Boolean(
+        place.openingHours
+          ?.isOpenNow,
+      ),
+
+    priceRangeId:
+      cleanText(
+        place.priceRangeId,
+      ),
 
     location: {
-      lat: Number.isFinite(Number(place.location?.lat))
-        ? Number(place.location.lat)
-        : null,
-      lng: Number.isFinite(Number(place.location?.lng))
-        ? Number(place.location.lng)
-        : null,
+      lat:
+        Number.isFinite(
+          Number(
+            place.location
+              ?.lat,
+          ),
+        )
+          ? Number(
+              place.location
+                .lat,
+            )
+          : null,
+
+      lng:
+        Number.isFinite(
+          Number(
+            place.location
+              ?.lng,
+          ),
+        )
+          ? Number(
+              place.location
+                .lng,
+            )
+          : null,
     },
   };
 }
-
 export default async function getPlacesFeedService({ limit, cursor } = {}) {
   const safeLimit = normalizeLimit(limit);
 
@@ -396,7 +571,32 @@ let query = db
   const hasMore = docs.length > safeLimit;
   const pageDocs = hasMore ? docs.slice(0, safeLimit) : docs;
 
-  const places = await Promise.all(pageDocs.map(mapPlaceForFeed));
+const subtagIds =
+  pageDocs.flatMap(
+    (
+      doc,
+    ) =>
+      normalizeStringArray(
+        doc.data()
+          ?.subtags,
+      ),
+  );
+
+const subtagLabelsMap =
+  await getSubtagLabelsMap(
+    subtagIds,
+  );
+
+const places =
+  pageDocs.map(
+    (
+      doc,
+    ) =>
+      mapPlaceForFeed(
+        doc,
+        subtagLabelsMap,
+      ),
+  );
 
   const lastDoc = pageDocs[pageDocs.length - 1];
 
