@@ -1,31 +1,260 @@
-import { db } from "../../../config/firebase.js";
+import {
+  gridDisk,
+  latLngToCell,
+} from "h3-js";
 
-const DEFAULT_LIMIT = 20;
-const MAX_LIMIT = 20;
+import {
+  db,
+} from "../../../config/firebase.js";
 
-const SUBTAGS_COLLECTION = "subtag";
-const HOME_MAX_SUBTAGS = 2;
+const DEFAULT_LIMIT =
+  100;
 
-function normalizeLimit(value) {
-  const parsed = Number(value);
+const MAX_LIMIT =
+  200;
 
-  if (!Number.isFinite(parsed) || parsed <= 0) {
+const MINIMUM_POOL_SIZE =
+  100;
+
+const INITIAL_RADIUS_KM =
+  1;
+
+const MAX_RADIUS_KM =
+  5;
+
+const H3_SEARCH_RESOLUTION =
+  7;
+
+const H3_SEARCH_RING_SIZE =
+  5;
+
+const FIRESTORE_IN_LIMIT =
+  30;
+
+const SUBTAGS_COLLECTION =
+  "subtag";
+
+const HOME_MAX_SUBTAGS =
+  2;
+
+const GOOGLE_FEED_PHOTO_MAX_WIDTH =
+  640;
+
+const GOOGLE_THUMBNAIL_MAX_WIDTH =
+  240;
+
+const VISIBLE_MODERATION_STATUSES =
+  new Set([
+    "published",
+    "warned",
+  ]);
+
+const VISIBLE_ACTIVITY_STATUSES =
+  new Set([
+    "active",
+    "low_activity",
+    "pending",
+  ]);
+
+function cleanText(
+  value,
+) {
+  return typeof value ===
+    "string"
+    ? value.trim()
+    : "";
+}
+
+function normalizeCoordinate(
+  value,
+) {
+  const parsed =
+    Number(value);
+
+  return Number.isFinite(
+    parsed,
+  )
+    ? parsed
+    : null;
+}
+
+function normalizeLimit(
+  value,
+) {
+  const parsed =
+    Number(value);
+
+  if (
+    !Number.isFinite(
+      parsed,
+    ) ||
+    parsed <= 0
+  ) {
     return DEFAULT_LIMIT;
   }
 
-  return Math.min(Math.floor(parsed), MAX_LIMIT);
+  return Math.min(
+    Math.floor(
+      parsed,
+    ),
+    MAX_LIMIT,
+  );
 }
 
-function cleanText(value) {
-  return typeof value === "string" ? value.trim() : "";
+function normalizeCursorOffset(
+  cursor,
+) {
+  const parsed =
+    Number(cursor);
+
+  if (
+    !Number.isFinite(
+      parsed,
+    ) ||
+    parsed < 0
+  ) {
+    return 0;
+  }
+
+  return Math.floor(
+    parsed,
+  );
 }
 
-const GOOGLE_FEED_PHOTO_MAX_WIDTH = 640;
-const GOOGLE_THUMBNAIL_MAX_WIDTH = 240;
+function normalizeStringArray(
+  value,
+) {
+  if (
+    !Array.isArray(
+      value,
+    )
+  ) {
+    return [];
+  }
+
+  return value
+    .filter(
+      (
+        item,
+      ) =>
+        typeof item ===
+        "string",
+    )
+    .map(
+      (
+        item,
+      ) =>
+        item.trim(),
+    )
+    .filter(
+      Boolean,
+    );
+}
+
+function chunkArray(
+  values,
+  chunkSize,
+) {
+  const chunks = [];
+
+  for (
+    let index = 0;
+    index < values.length;
+    index += chunkSize
+  ) {
+    chunks.push(
+      values.slice(
+        index,
+        index +
+          chunkSize,
+      ),
+    );
+  }
+
+  return chunks;
+}
+
+function calculateDistanceKm({
+  userLatitude,
+  userLongitude,
+  placeLatitude,
+  placeLongitude,
+}) {
+  const earthRadiusKm =
+    6371;
+
+  const toRadians =
+    (
+      degrees,
+    ) =>
+      (
+        degrees *
+        Math.PI
+      ) /
+      180;
+
+  const latitudeDifference =
+    toRadians(
+      placeLatitude -
+        userLatitude,
+    );
+
+  const longitudeDifference =
+    toRadians(
+      placeLongitude -
+        userLongitude,
+    );
+
+  const firstLatitude =
+    toRadians(
+      userLatitude,
+    );
+
+  const secondLatitude =
+    toRadians(
+      placeLatitude,
+    );
+
+  const haversineValue =
+    Math.sin(
+      latitudeDifference /
+        2,
+    ) **
+      2 +
+    Math.cos(
+      firstLatitude,
+    ) *
+      Math.cos(
+        secondLatitude,
+      ) *
+      Math.sin(
+        longitudeDifference /
+          2,
+      ) **
+        2;
+
+  const angularDistance =
+    2 *
+    Math.atan2(
+      Math.sqrt(
+        haversineValue,
+      ),
+      Math.sqrt(
+        1 -
+          haversineValue,
+      ),
+    );
+
+  return (
+    earthRadiusKm *
+    angularDistance
+  );
+}
 
 function getPublicApiUrl() {
   return cleanText(
-    process.env.PUBLIC_API_URL,
+    process.env
+      .PUBLIC_API_URL,
   ).replace(
     /\/+$/,
     "",
@@ -37,7 +266,9 @@ function buildGooglePhotoProxyUrl({
   maxWidthPx,
 }) {
   const cleanReference =
-    cleanText(reference);
+    cleanText(
+      reference,
+    );
 
   const publicApiUrl =
     getPublicApiUrl();
@@ -58,40 +289,49 @@ function buildGooglePhotoProxyUrl({
   );
 }
 
-function normalizeMainPhoto(mainPhoto) {
+function normalizeMainPhoto(
+  mainPhoto,
+) {
   if (
     !mainPhoto ||
-    typeof mainPhoto !== "object"
+    typeof mainPhoto !==
+      "object"
   ) {
     return null;
   }
 
   const source =
-    cleanText(mainPhoto.source);
+    cleanText(
+      mainPhoto.source,
+    );
 
   const order =
     Number.isFinite(
-      Number(mainPhoto.order),
+      Number(
+        mainPhoto.order,
+      ),
     )
-      ? Number(mainPhoto.order)
+      ? Number(
+          mainPhoto.order,
+        )
       : 0;
 
-  /*
-   * Lugar proveniente de Google.
-   *
-   * Una sola referencia produce una URL medium
-   * y otra thumbnail mediante nuestro backend.
-   */
   if (
-    source === "google" &&
-    cleanText(mainPhoto.reference)
+    source ===
+      "google" &&
+    cleanText(
+      mainPhoto.reference,
+    )
   ) {
     const reference =
-      cleanText(mainPhoto.reference);
+      cleanText(
+        mainPhoto.reference,
+      );
 
     const mediumUrl =
       buildGooglePhotoProxyUrl({
         reference,
+
         maxWidthPx:
           GOOGLE_FEED_PHOTO_MAX_WIDTH,
       });
@@ -99,66 +339,77 @@ function normalizeMainPhoto(mainPhoto) {
     const thumbnailUrl =
       buildGooglePhotoProxyUrl({
         reference,
+
         maxWidthPx:
           GOOGLE_THUMBNAIL_MAX_WIDTH,
       });
 
     return {
       source,
+
       reference,
+
       order,
 
       widthPx:
         Number.isFinite(
-          Number(mainPhoto.widthPx),
+          Number(
+            mainPhoto.widthPx,
+          ),
         )
-          ? Number(mainPhoto.widthPx)
+          ? Number(
+              mainPhoto.widthPx,
+            )
           : null,
 
       heightPx:
         Number.isFinite(
-          Number(mainPhoto.heightPx),
+          Number(
+            mainPhoto.heightPx,
+          ),
         )
-          ? Number(mainPhoto.heightPx)
+          ? Number(
+              mainPhoto.heightPx,
+            )
           : null,
 
-      /*
-       * url es la variante por defecto del feed.
-       */
       url:
         mediumUrl,
 
       mediumUrl,
+
       thumbnailUrl,
     };
   }
 
-  /*
-   * Lugar proveniente de una submission.
-   *
-   * Sus variantes ya viven en Firebase Storage.
-   */
   const mediumUrl =
     cleanText(
-      mainPhoto?.medium?.url ||
-      mainPhoto?.mediumUrl ||
-      mainPhoto?.url,
+      mainPhoto?.medium
+        ?.url ||
+        mainPhoto
+          ?.mediumUrl ||
+        mainPhoto?.url,
     );
 
   const thumbnailUrl =
     cleanText(
-      mainPhoto?.thumbnail?.url ||
-      mainPhoto?.thumbnailUrl,
+      mainPhoto?.thumbnail
+        ?.url ||
+        mainPhoto
+          ?.thumbnailUrl,
     );
 
   return {
     source:
-      source || "user",
+      source ||
+      "user",
 
     order,
 
     photoId:
-      cleanText(mainPhoto.photoId),
+      cleanText(
+        mainPhoto.photoId,
+      ),
 
     url:
       mediumUrl ||
@@ -176,115 +427,376 @@ function normalizeMainPhoto(mainPhoto) {
     widthPx:
       Number.isFinite(
         Number(
-          mainPhoto?.medium?.width ??
-          mainPhoto?.medium?.widthPx ??
-          mainPhoto?.widthPx,
+          mainPhoto?.medium
+            ?.width ??
+            mainPhoto?.medium
+              ?.widthPx ??
+            mainPhoto?.widthPx,
         ),
       )
         ? Number(
-            mainPhoto?.medium?.width ??
-            mainPhoto?.medium?.widthPx ??
-            mainPhoto?.widthPx,
+            mainPhoto?.medium
+              ?.width ??
+              mainPhoto?.medium
+                ?.widthPx ??
+              mainPhoto?.widthPx,
           )
         : null,
 
     heightPx:
       Number.isFinite(
         Number(
-          mainPhoto?.medium?.height ??
-          mainPhoto?.medium?.heightPx ??
-          mainPhoto?.heightPx,
+          mainPhoto?.medium
+            ?.height ??
+            mainPhoto?.medium
+              ?.heightPx ??
+            mainPhoto?.heightPx,
         ),
       )
         ? Number(
-            mainPhoto?.medium?.height ??
-            mainPhoto?.medium?.heightPx ??
-            mainPhoto?.heightPx,
+            mainPhoto?.medium
+              ?.height ??
+              mainPhoto?.medium
+                ?.heightPx ??
+              mainPhoto?.heightPx,
           )
         : null,
   };
 }
 
-function normalizeStringArray(value) {
-  if (!Array.isArray(value)) return [];
+function normalizeRating(
+  place,
+) {
+  const googleRating =
+    place?.googleData
+      ?.rating;
 
-  return value
-    .filter((item) => typeof item === "string")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
+  const averageRating =
+    place?.metrics
+      ?.averageRating;
 
-function normalizeRating(place) {
-  const googleRating = place?.googleData?.rating;
-  const averageRating = place?.metrics?.averageRating;
-
-  if (Number.isFinite(Number(googleRating)) && Number(googleRating) > 0) {
-    return Number(googleRating);
+  if (
+    Number.isFinite(
+      Number(
+        googleRating,
+      ),
+    ) &&
+    Number(
+      googleRating,
+    ) >
+      0
+  ) {
+    return Number(
+      googleRating,
+    );
   }
 
-  if (Number.isFinite(Number(averageRating)) && Number(averageRating) > 0) {
-    return Number(averageRating);
+  if (
+    Number.isFinite(
+      Number(
+        averageRating,
+      ),
+    ) &&
+    Number(
+      averageRating,
+    ) >
+      0
+  ) {
+    return Number(
+      averageRating,
+    );
   }
 
   return null;
 }
 
-function normalizeUserRatingCount(place) {
-  const userRatingCount = place?.googleData?.userRatingCount;
-  const ratingsCount = place?.metrics?.ratingsCount;
+function normalizeUserRatingCount(
+  place,
+) {
+  const googleCount =
+    place?.googleData
+      ?.userRatingCount;
 
-  if (Number.isFinite(Number(userRatingCount)) && Number(userRatingCount) > 0) {
-    return Number(userRatingCount);
+  const internalCount =
+    place?.metrics
+      ?.ratingsCount;
+
+  if (
+    Number.isFinite(
+      Number(
+        googleCount,
+      ),
+    ) &&
+    Number(
+      googleCount,
+    ) >
+      0
+  ) {
+    return Number(
+      googleCount,
+    );
   }
 
-  if (Number.isFinite(Number(ratingsCount)) && Number(ratingsCount) > 0) {
-    return Number(ratingsCount);
+  if (
+    Number.isFinite(
+      Number(
+        internalCount,
+      ),
+    ) &&
+    Number(
+      internalCount,
+    ) >
+      0
+  ) {
+    return Number(
+      internalCount,
+    );
   }
 
   return 0;
 }
 
-// async function getSubtagLabelById(subtagId) {
-//   const cleanSubtagId = cleanText(subtagId);
+function isVisiblePlace(
+  place,
+) {
+  const status =
+    cleanText(
+      place?.status,
+    );
 
-//   if (!cleanSubtagId) return "";
+  const activityStatus =
+    cleanText(
+      place?.activityStatus,
+    );
 
-//   try {
-//     const subtagDoc = await db
-//       .collection(SUBTAGS_COLLECTION)
-//       .doc(cleanSubtagId)
-//       .get();
+  const deletedAt =
+    place?.deletedAt;
 
-//     if (!subtagDoc.exists) {
-//       return cleanSubtagId;
-//     }
+  return (
+    VISIBLE_MODERATION_STATUSES.has(
+      status,
+    ) &&
+    VISIBLE_ACTIVITY_STATUSES.has(
+      activityStatus,
+    ) &&
+    (
+      deletedAt ===
+        null ||
+      deletedAt ===
+        undefined
+    )
+  );
+}
 
-//     const subtag = subtagDoc.data();
+async function getNearbyPlaceDocuments({
+  latitude,
+  longitude,
+}) {
+  const centerHexId =
+    latLngToCell(
+      latitude,
+      longitude,
+      H3_SEARCH_RESOLUTION,
+    );
 
-//     return (
-//       cleanText(subtag.label) ||
-//       cleanText(subtag.name) ||
-//       cleanText(subtag.title) ||
-//       cleanSubtagId
-//     );
-//   } catch (error) {
-//     console.error("Error obteniendo label de subtag:", error);
-//     return cleanSubtagId;
-//   }
-// }
+  /*
+   * Se consultan suficientes celdas H7
+   * para cubrir el radio máximo.
+   *
+   * El filtro exacto de 5 km se realiza
+   * después mediante Haversine.
+   */
+  const nearbyHexIds =
+    gridDisk(
+      centerHexId,
+      H3_SEARCH_RING_SIZE,
+    );
 
-// async function normalizeSubtagsWithLabels(subtags) {
-//   const cleanSubtags = normalizeStringArray(subtags);
+  const hexChunks =
+    chunkArray(
+      nearbyHexIds,
+      FIRESTORE_IN_LIMIT,
+    );
 
-//   if (cleanSubtags.length === 0) return [];
+  const snapshots =
+    await Promise.all(
+      hexChunks.map(
+        (
+          hexChunk,
+        ) =>
+          db
+            .collection(
+              "places",
+            )
+            .where(
+              "parentHexId",
+              "in",
+              hexChunk,
+            )
+            .get(),
+      ),
+    );
 
-//   const subtagLabels = await Promise.all(
-//     cleanSubtags.map((subtagId) => getSubtagLabelById(subtagId))
-//   );
+  const documentsById =
+    new Map();
 
-//   return subtagLabels.map(cleanText).filter(Boolean);
-// }
+  snapshots.forEach(
+    (
+      snapshot,
+    ) => {
+      snapshot.docs.forEach(
+        (
+          document,
+        ) => {
+          const place =
+            document.data();
 
+          if (
+            !isVisiblePlace(
+              place,
+            )
+          ) {
+            return;
+          }
+
+          documentsById.set(
+            document.id,
+            document,
+          );
+        },
+      );
+    },
+  );
+
+  return [
+    ...documentsById.values(),
+  ];
+}
+
+function buildDistanceCandidates({
+  documents,
+  latitude,
+  longitude,
+}) {
+  return documents
+    .map(
+      (
+        document,
+      ) => {
+        const place =
+          document.data();
+
+        const placeLatitude =
+          normalizeCoordinate(
+            place?.location
+              ?.lat,
+          );
+
+        const placeLongitude =
+          normalizeCoordinate(
+            place?.location
+              ?.lng,
+          );
+
+        if (
+          placeLatitude ===
+            null ||
+          placeLongitude ===
+            null
+        ) {
+          return null;
+        }
+
+        const distanceKm =
+          calculateDistanceKm({
+            userLatitude:
+              latitude,
+
+            userLongitude:
+              longitude,
+
+            placeLatitude,
+
+            placeLongitude,
+          });
+
+        return {
+          document,
+
+          distanceKm,
+        };
+      },
+    )
+    .filter(
+      Boolean,
+    )
+    .filter(
+      (
+        candidate,
+      ) =>
+        candidate.distanceKm <=
+        MAX_RADIUS_KM,
+    )
+    .sort(
+      (
+        firstCandidate,
+        secondCandidate,
+      ) =>
+        firstCandidate
+          .distanceKm -
+        secondCandidate
+          .distanceKm,
+    );
+}
+
+function resolveSearchRadius(
+  candidates,
+) {
+  for (
+    let radiusKm =
+      INITIAL_RADIUS_KM;
+    radiusKm <=
+    MAX_RADIUS_KM;
+    radiusKm += 1
+  ) {
+    const candidatesInsideRadius =
+      candidates.filter(
+        (
+          candidate,
+        ) =>
+          candidate.distanceKm <=
+          radiusKm,
+      );
+
+    if (
+      candidatesInsideRadius
+        .length >=
+      MINIMUM_POOL_SIZE
+    ) {
+      return {
+        radiusUsedKm:
+          radiusKm,
+
+        candidates:
+          candidatesInsideRadius,
+      };
+    }
+  }
+
+  return {
+    radiusUsedKm:
+      MAX_RADIUS_KM,
+
+    candidates:
+      candidates.filter(
+        (
+          candidate,
+        ) =>
+          candidate.distanceKm <=
+          MAX_RADIUS_KM,
+      ),
+  };
+}
 
 async function getSubtagLabelsMap(
   subtagIds,
@@ -392,54 +904,74 @@ function normalizeSubtagsWithLabels(
     );
 }
 
-function buildHomeTags({ tagLabel, subtags }) {
-  const cleanTagLabel = cleanText(tagLabel);
+function buildHomeTags({
+  tagLabel,
+  subtags,
+}) {
+  const cleanTagLabel =
+    cleanText(
+      tagLabel,
+    );
 
-  const visibleSubtags = Array.isArray(subtags)
-    ? subtags.slice(0, HOME_MAX_SUBTAGS)
-    : [];
+  const visibleSubtags =
+    Array.isArray(
+      subtags,
+    )
+      ? subtags.slice(
+          0,
+          HOME_MAX_SUBTAGS,
+        )
+      : [];
 
-  return [cleanTagLabel, ...visibleSubtags]
-    .map(cleanText)
-    .filter(Boolean);
+  return [
+    cleanTagLabel,
+    ...visibleSubtags,
+  ]
+    .map(
+      cleanText,
+    )
+    .filter(
+      Boolean,
+    );
 }
 
-function mapPlaceForFeed(
-  doc,
+function mapPlaceForFeed({
+  document,
+  distanceKm,
   subtagLabelsMap,
-) {
+}) {
   const place =
-    doc.data();
+    document.data();
 
   const subtagsWithLabels =
     normalizeSubtagsWithLabels(
-      place.subtags,
+      place?.subtags,
       subtagLabelsMap,
     );
 
   const tagLabel =
     cleanText(
-      place.tagLabel,
+      place?.tagLabel,
     );
 
   return {
     id:
-      doc.id,
+      document.id,
 
     placeId:
       cleanText(
-        place.placeId,
+        place?.placeId,
       ) ||
-      doc.id,
+      document.id,
 
     name:
       cleanText(
-        place.name,
+        place?.name,
       ),
 
     mainPhoto:
       normalizeMainPhoto(
-        place.mainPhoto,
+        place?.mainPhoto,
       ),
 
     rating:
@@ -454,7 +986,7 @@ function mapPlaceForFeed(
 
     tagId:
       cleanText(
-        place.tagId,
+        place?.tagId,
       ),
 
     tagLabel,
@@ -464,7 +996,7 @@ function mapPlaceForFeed(
 
     approaches:
       normalizeStringArray(
-        place.approaches,
+        place?.approaches,
       ),
 
     tags:
@@ -477,132 +1009,202 @@ function mapPlaceForFeed(
 
     openingHoursLabel:
       cleanText(
-        place.openingHours
+        place?.openingHours
           ?.label,
       ),
 
     isOpenNow:
       Boolean(
-        place.openingHours
+        place?.openingHours
           ?.isOpenNow,
       ),
 
     priceRangeId:
       cleanText(
-        place.priceRangeId,
+        place?.priceRangeId,
       ),
 
     location: {
       lat:
-        Number.isFinite(
-          Number(
-            place.location
-              ?.lat,
-          ),
-        )
-          ? Number(
-              place.location
-                .lat,
-            )
-          : null,
+        normalizeCoordinate(
+          place?.location
+            ?.lat,
+        ),
 
       lng:
-        Number.isFinite(
-          Number(
-            place.location
-              ?.lng,
-          ),
-        )
-          ? Number(
-              place.location
-                .lng,
-            )
-          : null,
+        normalizeCoordinate(
+          place?.location
+            ?.lng,
+        ),
     },
+
+    distanceKm:
+      Number(
+        distanceKm.toFixed(
+          3,
+        ),
+      ),
   };
 }
-export default async function getPlacesFeedService({ limit, cursor } = {}) {
-  const safeLimit = normalizeLimit(limit);
 
-let query = db
-  .collection("places")
-  .where(
-    "status",
-    "in",
-    [
-      "published",
-      "in_review",
-      "warned",
-    ],
-  )
-  .where(
-    "activityStatus",
-    "in",
-    [
-      "active",
-      "low_activity",
-      "pending",
-    ],
-  )
-  .where(
-    "deletedAt",
-    "==",
-    null,
-  )
-  .orderBy(
-    "updatedAt",
-    "desc",
-  )
-  .limit(
-    safeLimit + 1,
-  );
+export default async function getPlacesFeedService({
+  latitude,
+  longitude,
+  limit,
+  cursor,
+} = {}) {
+  const normalizedLatitude =
+    normalizeCoordinate(
+      latitude,
+    );
 
-  if (cursor) {
-    const cursorDoc = await db.collection("places").doc(cursor).get();
+  const normalizedLongitude =
+    normalizeCoordinate(
+      longitude,
+    );
 
-    if (cursorDoc.exists) {
-      query = query.startAfter(cursorDoc);
-    }
+  if (
+    normalizedLatitude ===
+      null ||
+    normalizedLongitude ===
+      null
+  ) {
+    const error =
+      new Error(
+        "La ubicación del usuario es obligatoria para generar el feed.",
+      );
+
+    error.statusCode =
+      400;
+
+    throw error;
   }
 
-  const snapshot = await query.get();
+  const safeLimit =
+    normalizeLimit(
+      limit,
+    );
 
-  const docs = snapshot.docs;
-  const hasMore = docs.length > safeLimit;
-  const pageDocs = hasMore ? docs.slice(0, safeLimit) : docs;
+  const cursorOffset =
+    normalizeCursorOffset(
+      cursor,
+    );
 
-const subtagIds =
-  pageDocs.flatMap(
-    (
-      doc,
-    ) =>
-      normalizeStringArray(
-        doc.data()
-          ?.subtags,
-      ),
-  );
+  const nearbyDocuments =
+    await getNearbyPlaceDocuments({
+      latitude:
+        normalizedLatitude,
 
-const subtagLabelsMap =
-  await getSubtagLabelsMap(
-    subtagIds,
-  );
+      longitude:
+        normalizedLongitude,
+    });
 
-const places =
-  pageDocs.map(
-    (
-      doc,
-    ) =>
-      mapPlaceForFeed(
-        doc,
-        subtagLabelsMap,
-      ),
-  );
+  const distanceCandidates =
+    buildDistanceCandidates({
+      documents:
+        nearbyDocuments,
 
-  const lastDoc = pageDocs[pageDocs.length - 1];
+      latitude:
+        normalizedLatitude,
+
+      longitude:
+        normalizedLongitude,
+    });
+
+  const {
+    radiusUsedKm,
+    candidates:
+      candidatesInsideRadius,
+  } =
+    resolveSearchRadius(
+      distanceCandidates,
+    );
+
+  const totalAvailable =
+    candidatesInsideRadius.length;
+
+  const selectedCandidates =
+    candidatesInsideRadius.slice(
+      cursorOffset,
+      cursorOffset +
+        safeLimit,
+    );
+
+  const selectedDocuments =
+    selectedCandidates.map(
+      (
+        candidate,
+      ) =>
+        candidate.document,
+    );
+
+  const subtagIds =
+    selectedDocuments.flatMap(
+      (
+        document,
+      ) =>
+        normalizeStringArray(
+          document.data()
+            ?.subtags,
+        ),
+    );
+
+  const subtagLabelsMap =
+    await getSubtagLabelsMap(
+      subtagIds,
+    );
+
+  const places =
+    selectedCandidates.map(
+      (
+        candidate,
+      ) =>
+        mapPlaceForFeed({
+          document:
+            candidate.document,
+
+          distanceKm:
+            candidate.distanceKm,
+
+          subtagLabelsMap,
+        }),
+    );
+
+  const nextOffset =
+    cursorOffset +
+    places.length;
+
+  const hasMore =
+    nextOffset <
+    totalAvailable;
+
+  const insufficientResults =
+    radiusUsedKm ===
+      MAX_RADIUS_KM &&
+    totalAvailable <
+      MINIMUM_POOL_SIZE;
 
   return {
     places,
-    nextCursor: hasMore && lastDoc ? lastDoc.id : null,
+
+    nextCursor:
+      hasMore
+        ? String(
+            nextOffset,
+          )
+        : null,
+
     hasMore,
+
+    radiusUsedKm,
+
+    totalAvailable,
+
+    insufficientResults,
+
+    message:
+      insufficientResults
+        ? "No existen más resultados suficientes en esta zona. Muévete a una zona con mayor cobertura para descubrir más lugares."
+        : "",
   };
 }
