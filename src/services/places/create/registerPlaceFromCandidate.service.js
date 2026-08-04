@@ -1,6 +1,15 @@
-import { FieldValue } from "firebase-admin/firestore";
-import { latLngToCell } from "h3-js";
-import { db } from "../../../config/firebase.js";
+import {
+  FieldValue,
+} from "firebase-admin/firestore";
+
+import {
+  cellToParent,
+  latLngToCell,
+} from "h3-js";
+
+import {
+  db,
+} from "../../../config/firebase.js";
 
 const ADMIN_USERS_COLLECTION =
   "adminUsers";
@@ -8,103 +17,243 @@ const ADMIN_USERS_COLLECTION =
 const ADMIN_WEEKLY_ACTIVITY_COLLECTION =
   "weeklyActivity";
 
-function createHttpError(message, statusCode = 400) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
+/*
+ * Categorías que no utilizan enfoques.
+ *
+ * Estos son los IDs reales guardados
+ * actualmente en la colección tag.
+ */
+const TAGS_WITHOUT_APPROACH =
+  new Set([
+    "tag_service",
+    "tag_shopping",
+    "tag_lodging",
+  ]);
+
+function createHttpError(
+  message,
+  statusCode = 400,
+) {
+  const error =
+    new Error(message);
+
+  error.statusCode =
+    statusCode;
+
   return error;
 }
 
-function normalizePriceRangeId(price) {
-  if (!price) return null;
+function normalizePriceRangeId(
+  price,
+) {
+  if (!price) {
+    return null;
+  }
 
-  if (typeof price === "string") {
+  if (
+    typeof price ===
+    "string"
+  ) {
     return price;
   }
 
-  if (typeof price === "object") {
-    return price.id || price.priceRangeId || null;
+  if (
+    typeof price ===
+    "object"
+  ) {
+    return (
+      price.id ||
+      price.priceRangeId ||
+      null
+    );
   }
 
-  return String(price);
+  return String(
+    price,
+  );
 }
 
-function normalizeOpeningHours(openingHours) {
+function normalizeOpeningHours(
+  openingHours,
+) {
   if (!openingHours) {
     return {
-      type: "not_specified",
-      label: "Horario no especificado",
+      type:
+        "not_specified",
+
+      label:
+        "Horario no especificado",
+
       days: [],
-      openTime: null,
-      closeTime: null,
-      isOpenNow: false,
-      lastScheduleCheckAt: null,
+
+      openTime:
+        null,
+
+      closeTime:
+        null,
+
+      isOpenNow:
+        false,
+
+      lastScheduleCheckAt:
+        null,
     };
   }
 
-  if (typeof openingHours === "string") {
+  if (
+    typeof openingHours ===
+    "string"
+  ) {
     return {
-      type: "defined",
-      label: openingHours,
+      type:
+        "defined",
+
+      label:
+        openingHours,
+
       days: [],
-      openTime: null,
-      closeTime: null,
-      isOpenNow: false,
-      lastScheduleCheckAt: null,
+
+      openTime:
+        null,
+
+      closeTime:
+        null,
+
+      isOpenNow:
+        false,
+
+      lastScheduleCheckAt:
+        null,
     };
   }
 
-  if (typeof openingHours === "object") {
+  if (
+    typeof openingHours ===
+    "object"
+  ) {
     return {
-      type: openingHours.type || "defined",
-      label: openingHours.label || "",
-      days: Array.isArray(openingHours.days) ? openingHours.days : [],
-      openTime: openingHours.openTime || null,
-      closeTime: openingHours.closeTime || null,
-      isOpenNow: Boolean(openingHours.isOpenNow),
-      lastScheduleCheckAt: openingHours.lastScheduleCheckAt || null,
+      type:
+        openingHours.type ||
+        "defined",
+
+      label:
+        openingHours.label ||
+        "",
+
+      days:
+        Array.isArray(
+          openingHours.days,
+        )
+          ? openingHours.days
+          : [],
+
+      openTime:
+        openingHours.openTime ||
+        null,
+
+      closeTime:
+        openingHours.closeTime ||
+        null,
+
+      isOpenNow:
+        Boolean(
+          openingHours.isOpenNow,
+        ),
+
+      lastScheduleCheckAt:
+        openingHours
+          .lastScheduleCheckAt ||
+        null,
     };
   }
 
   return {
-    type: "not_specified",
-    label: "Horario no especificado",
+    type:
+      "not_specified",
+
+    label:
+      "Horario no especificado",
+
     days: [],
-    openTime: null,
-    closeTime: null,
-    isOpenNow: false,
-    lastScheduleCheckAt: null,
+
+    openTime:
+      null,
+
+    closeTime:
+      null,
+
+    isOpenNow:
+      false,
+
+    lastScheduleCheckAt:
+      null,
   };
 }
 
-function normalizeLocation(location) {
-  if (!location || typeof location !== "object") {
+function normalizeLocation(
+  location,
+) {
+  if (
+    !location ||
+    typeof location !==
+      "object"
+  ) {
     return null;
   }
 
-  const lat = location.lat ?? location.latitude;
-  const lng = location.lng ?? location.longitude;
+  const lat =
+    location.lat ??
+    location.latitude;
 
-  if (lat === undefined || lng === undefined) {
+  const lng =
+    location.lng ??
+    location.longitude;
+
+  if (
+    lat === undefined ||
+    lng === undefined
+  ) {
     return null;
   }
 
-  const normalizedLat = Number(lat);
-  const normalizedLng = Number(lng);
+  const normalizedLat =
+    Number(
+      lat,
+    );
 
-  if (Number.isNaN(normalizedLat) || Number.isNaN(normalizedLng)) {
+  const normalizedLng =
+    Number(
+      lng,
+    );
+
+  if (
+    Number.isNaN(
+      normalizedLat,
+    ) ||
+    Number.isNaN(
+      normalizedLng,
+    )
+  ) {
     return null;
   }
 
   return {
-    lat: normalizedLat,
-    lng: normalizedLng,
+    lat:
+      normalizedLat,
+
+    lng:
+      normalizedLng,
   };
 }
 
 function normalizeGooglePhotoReferences(
-  photos = []
+  photos = [],
 ) {
-  if (!Array.isArray(photos)) {
+  if (
+    !Array.isArray(
+      photos,
+    )
+  ) {
     return [];
   }
 
@@ -113,38 +262,52 @@ function normalizeGooglePhotoReferences(
       (photo) =>
         photo?.name ||
         photo?.photoReference ||
-        photo?.reference
+        photo?.reference,
     )
-    .map((photo, index) => {
-      const widthPx =
-        Number(photo.widthPx);
+    .map(
+      (
+        photo,
+        index,
+      ) => {
+        const widthPx =
+          Number(
+            photo.widthPx,
+          );
 
-      const heightPx =
-        Number(photo.heightPx);
+        const heightPx =
+          Number(
+            photo.heightPx,
+          );
 
-      return {
-        source: "google",
+        return {
+          source:
+            "google",
 
-        reference:
-          photo.name ||
-          photo.photoReference ||
-          photo.reference,
+          reference:
+            photo.name ||
+            photo.photoReference ||
+            photo.reference,
 
-        widthPx:
-          Number.isFinite(widthPx)
-            ? widthPx
-            : null,
+          widthPx:
+            Number.isFinite(
+              widthPx,
+            )
+              ? widthPx
+              : null,
 
-        heightPx:
-          Number.isFinite(heightPx)
-            ? heightPx
-            : null,
+          heightPx:
+            Number.isFinite(
+              heightPx,
+            )
+              ? heightPx
+              : null,
 
-        order: index,
-      };
-    });
+          order:
+            index,
+        };
+      },
+    );
 }
-
 
 function getCurrentWeekId(
   date = new Date(),
@@ -173,7 +336,10 @@ function getCurrentWeekId(
 
   return currentDate
     .toISOString()
-    .slice(0, 10);
+    .slice(
+      0,
+      10,
+    );
 }
 
 function buildActivityCheckpoint() {
@@ -199,28 +365,36 @@ function buildActivityCheckpoint() {
 }
 
 function getMainPhoto(
-  photos = []
+  photos = [],
 ) {
   if (
-    !Array.isArray(photos) ||
+    !Array.isArray(
+      photos,
+    ) ||
     photos.length === 0
   ) {
     return null;
   }
 
   const eligiblePhotos =
-    photos.filter((photo) => {
-      const width =
-        Number(photo.widthPx) || 0;
+    photos.filter(
+      (photo) => {
+        const width =
+          Number(
+            photo.widthPx,
+          ) || 0;
 
-      const height =
-        Number(photo.heightPx) || 0;
+        const height =
+          Number(
+            photo.heightPx,
+          ) || 0;
 
-      return (
-        width >= 1080 &&
-        height >= 720
-      );
-    });
+        return (
+          width >= 1080 &&
+          height >= 720
+        );
+      },
+    );
 
   /*
    * Preferimos únicamente fotos que cumplan
@@ -229,7 +403,10 @@ function getMainPhoto(
    * Si ninguna cumple, conservamos la primera
    * para no romper lugares sin fotos grandes.
    */
-  if (eligiblePhotos.length === 0) {
+  if (
+    eligiblePhotos.length ===
+    0
+  ) {
     return {
       ...photos[0],
     };
@@ -241,32 +418,35 @@ function getMainPhoto(
   let selectedResolution =
     (
       Number(
-        selectedPhoto.widthPx
+        selectedPhoto.widthPx,
       ) || 0
     ) *
     (
       Number(
-        selectedPhoto.heightPx
+        selectedPhoto.heightPx,
       ) || 0
     );
 
   for (
     let index = 1;
-    index < eligiblePhotos.length;
+    index <
+    eligiblePhotos.length;
     index += 1
   ) {
     const currentPhoto =
-      eligiblePhotos[index];
+      eligiblePhotos[
+        index
+      ];
 
     const currentResolution =
       (
         Number(
-          currentPhoto.widthPx
+          currentPhoto.widthPx,
         ) || 0
       ) *
       (
         Number(
-          currentPhoto.heightPx
+          currentPhoto.heightPx,
         ) || 0
       );
 
@@ -294,32 +474,64 @@ function getMainPhoto(
   };
 }
 
-async function findCandidateRef({ candidateId, googlePlaceId }) {
-  const directRef = db.collection("candidatesPlaces").doc(candidateId);
-  const directSnap = await directRef.get();
+async function findCandidateRef({
+  candidateId,
+  googlePlaceId,
+}) {
+  const directRef =
+    db
+      .collection(
+        "candidatesPlaces",
+      )
+      .doc(
+        candidateId,
+      );
 
-  if (directSnap.exists) {
+  const directSnap =
+    await directRef.get();
+
+  if (
+    directSnap.exists
+  ) {
     return {
-      ref: directRef,
-      snap: directSnap,
+      ref:
+        directRef,
+
+      snap:
+        directSnap,
     };
   }
 
-  const querySnap = await db
-    .collection("candidatesPlaces")
-    .where("googlePlaceId", "==", googlePlaceId)
-    .limit(1)
-    .get();
+  const querySnap =
+    await db
+      .collection(
+        "candidatesPlaces",
+      )
+      .where(
+        "googlePlaceId",
+        "==",
+        googlePlaceId,
+      )
+      .limit(
+        1,
+      )
+      .get();
 
-  if (querySnap.empty) {
+  if (
+    querySnap.empty
+  ) {
     return null;
   }
 
-  const candidateDoc = querySnap.docs[0];
+  const candidateDoc =
+    querySnap.docs[0];
 
   return {
-    ref: candidateDoc.ref,
-    snap: candidateDoc,
+    ref:
+      candidateDoc.ref,
+
+    snap:
+      candidateDoc,
   };
 }
 
@@ -336,7 +548,6 @@ export default async function registerPlaceFromCandidateService({
     address,
 
     location,
-    parentHexId,
 
     tagId,
     tagLabel = "",
@@ -354,141 +565,331 @@ export default async function registerPlaceFromCandidateService({
   } = body;
 
   if (!candidateId) {
-    throw createHttpError("El candidateId es obligatorio.", 400);
+    throw createHttpError(
+      "El candidateId es obligatorio.",
+      400,
+    );
   }
 
   if (!googlePlaceId) {
-    throw createHttpError("El googlePlaceId es obligatorio.", 400);
+    throw createHttpError(
+      "El googlePlaceId es obligatorio.",
+      400,
+    );
   }
 
-  if (!name?.trim()) {
-    throw createHttpError("El nombre del lugar es obligatorio.", 400);
+  if (
+    !name?.trim()
+  ) {
+    throw createHttpError(
+      "El nombre del lugar es obligatorio.",
+      400,
+    );
   }
 
-  if (!description?.trim()) {
-    throw createHttpError("La descripción del lugar es obligatoria.", 400);
+  if (
+    !description?.trim()
+  ) {
+    throw createHttpError(
+      "La descripción del lugar es obligatoria.",
+      400,
+    );
   }
 
   if (!tagId) {
-    throw createHttpError("La etiqueta principal es obligatoria.", 400);
+    throw createHttpError(
+      "La etiqueta principal es obligatoria.",
+      400,
+    );
   }
 
-  if (!Array.isArray(subtags) || subtags.length === 0) {
-    throw createHttpError("Selecciona al menos una subetiqueta.", 400);
+  if (
+    !Array.isArray(
+      subtags,
+    ) ||
+    subtags.length === 0
+  ) {
+    throw createHttpError(
+      "Selecciona al menos una subetiqueta.",
+      400,
+    );
   }
 
-  if (!Array.isArray(approaches) || approaches.length === 0) {
-    throw createHttpError("Selecciona al menos un enfoque.", 400);
+  /*
+   * Servicios, Compras y Hospedaje no
+   * utilizan enfoques.
+   *
+   * El resto de categorías conserva
+   * la validación anterior.
+   */
+  const normalizedTagId =
+    String(
+      tagId,
+    ).trim();
+
+  const requiresApproach =
+    !TAGS_WITHOUT_APPROACH.has(
+      normalizedTagId,
+    );
+
+  if (
+    requiresApproach &&
+    (
+      !Array.isArray(
+        approaches,
+      ) ||
+      approaches.length === 0
+    )
+  ) {
+    throw createHttpError(
+      "Selecciona al menos un enfoque.",
+      400,
+    );
   }
 
-  const normalizedLocation = normalizeLocation(location);
+  const normalizedLocation =
+    normalizeLocation(
+      location,
+    );
 
-  if (!normalizedLocation) {
-    throw createHttpError("La ubicación del lugar es obligatoria.", 400);
+  if (
+    !normalizedLocation
+  ) {
+    throw createHttpError(
+      "La ubicación del lugar es obligatoria.",
+      400,
+    );
   }
 
-  const { lat, lng } = normalizedLocation;
+  const {
+    lat,
+    lng,
+  } = normalizedLocation;
 
-  const candidateResult = await findCandidateRef({
-    candidateId,
-    googlePlaceId,
-  });
+  const candidateResult =
+    await findCandidateRef({
+      candidateId,
+      googlePlaceId,
+    });
 
-  if (!candidateResult) {
-    throw createHttpError("El candidato no existe en candidatesPlaces.", 404);
+  if (
+    !candidateResult
+  ) {
+    throw createHttpError(
+      "El candidato no existe en candidatesPlaces.",
+      404,
+    );
   }
 
-  const { ref: candidateRef, snap: candidateSnap } = candidateResult;
-  const candidateData = candidateSnap.data();
+  const {
+    ref:
+      candidateRef,
 
-  const existingPlaceSnap = await db
-    .collection("places")
-    .where("origin.googlePlaceId", "==", googlePlaceId)
-    .limit(1)
-    .get();
+    snap:
+      candidateSnap,
+  } = candidateResult;
 
-  if (!existingPlaceSnap.empty) {
-    throw createHttpError("Este lugar ya existe en places.", 409);
+  const candidateData =
+    candidateSnap.data();
+
+  const existingPlaceSnap =
+    await db
+      .collection(
+        "places",
+      )
+      .where(
+        "origin.googlePlaceId",
+        "==",
+        googlePlaceId,
+      )
+      .limit(
+        1,
+      )
+      .get();
+
+  if (
+    !existingPlaceSnap.empty
+  ) {
+    throw createHttpError(
+      "Este lugar ya existe en places.",
+      409,
+    );
   }
 
-  const placeRef = db.collection("places").doc();
-  const placeId = placeRef.id;
+  const placeRef =
+    db
+      .collection(
+        "places",
+      )
+      .doc();
+
+  const placeId =
+    placeRef.id;
 
   const adminUid =
-  adminUser?.uid;
+    adminUser?.uid;
 
-if (!adminUid) {
-  throw createHttpError(
-    "No se encontró el administrador autenticado.",
-    401,
-  );
-}
+  if (!adminUid) {
+    throw createHttpError(
+      "No se encontró el administrador autenticado.",
+      401,
+    );
+  }
 
-const now =
-  FieldValue.serverTimestamp();
+  const now =
+    FieldValue
+      .serverTimestamp();
 
-const currentWeekId =
-  getCurrentWeekId();
+  const currentWeekId =
+    getCurrentWeekId();
 
-  const h3Resolution = 9;
-  const placeHexId = latLngToCell(lat, lng, h3Resolution);
+  /*
+   * Índices geográficos.
+   *
+   * El H9 se calcula directamente desde
+   * las coordenadas normalizadas.
+   *
+   * El H7 padre se calcula siempre desde
+   * ese H9, evitando inconsistencias con
+   * valores enviados desde el frontend.
+   */
+  const h3Resolution =
+    9;
 
-  const normalizedPhotos = normalizeGooglePhotoReferences(photos);
-  const mainPhoto = getMainPhoto(normalizedPhotos);
+  const placeHexId =
+    latLngToCell(
+      lat,
+      lng,
+      h3Resolution,
+    );
 
-  const normalizedOpeningHours = normalizeOpeningHours(
-    openingHours || schedule || null
-  );
+  const resolvedParentHexId =
+    cellToParent(
+      placeHexId,
+      7,
+    );
 
-  const normalizedPriceRangeId = normalizePriceRangeId(
-    priceRangeId || price || null
-  );
+  const normalizedPhotos =
+    normalizeGooglePhotoReferences(
+      photos,
+    );
+
+  const mainPhoto =
+    getMainPhoto(
+      normalizedPhotos,
+    );
+
+  const normalizedOpeningHours =
+    normalizeOpeningHours(
+      openingHours ||
+      schedule ||
+      null,
+    );
+
+  const normalizedPriceRangeId =
+    normalizePriceRangeId(
+      priceRangeId ||
+      price ||
+      null,
+    );
 
   const placeData = {
     placeId,
 
     origin: {
-      type: "google_candidate",
+      type:
+        "google_candidate",
+
       googlePlaceId,
-      submissionId: null,
-      candidateId: candidateRef.id,
-      submittedBy: null,
-      approvedBy: adminUid,
-      approvedAt: now,
+
+      submissionId:
+        null,
+
+      candidateId:
+        candidateRef.id,
+
+      submittedBy:
+        null,
+
+      approvedBy:
+        adminUid,
+
+      approvedAt:
+        now,
     },
 
-      status: "published",
-    activityStatus: "active",
-    activityCheckpoint:
-  buildActivityCheckpoint(),
-    createdBy: adminUid, 
+    status:
+      "published",
 
-    name: name.trim(),
-    description: description.trim(),
-    address: address || candidateData.address || "",
+    activityStatus:
+      "active",
+
+    activityCheckpoint:
+      buildActivityCheckpoint(),
+
+    createdBy:
+      adminUid,
+
+    name:
+      name.trim(),
+
+    description:
+      description.trim(),
+
+    address:
+      address ||
+      candidateData.address ||
+      "",
 
     location: {
       lat,
       lng,
     },
 
-    parentHexId: parentHexId || candidateData.parentHexId || null,
+    parentHexId:
+      resolvedParentHexId,
+
     placeHexId,
+
     h3Resolution,
 
-    tagId,
-    tagLabel,
-    subtags,
-    approaches,
+    tagId:
+      normalizedTagId,
 
-    priceRangeId: normalizedPriceRangeId,
+    tagLabel,
+
+    subtags,
+
+    /*
+     * Para Servicios, Compras y Hospedaje
+     * este arreglo puede quedar vacío.
+     */
+    approaches:
+      Array.isArray(
+        approaches,
+      )
+        ? approaches
+        : [],
+
+    priceRangeId:
+      normalizedPriceRangeId,
 
     googleData: {
-      rating: googleData.rating ?? candidateData.rating ?? null,
+      rating:
+        googleData.rating ??
+        candidateData.rating ??
+        null,
+
       userRatingCount:
-        googleData.userRatingCount ?? candidateData.userRatingCount ?? null,
+        googleData.userRatingCount ??
+        candidateData.userRatingCount ??
+        null,
+
       googleMapsUri:
-        googleData.googleMapsUri ?? candidateData.googleMapsUri ?? null,
+        googleData.googleMapsUri ??
+        candidateData.googleMapsUri ??
+        null,
+
       googleDataFetchedAt:
         googleData.googleDataFetchedAt ??
         candidateData.googleDataFetchedAt ??
@@ -496,155 +897,243 @@ const currentWeekId =
     },
 
     trend: {
-      score: 0,
-      weeklyViews: 0,
-      weeklyLikes: 0,
-      weeklySaves: 0,
-      weeklyPhotos: 0,
-      weeklyReviews: 0,
-      weeklyRatingAverage: 0,
-      calculatedAt: null,
-      periodStart: null,
-      periodEnd: null,
+      score:
+        0,
+
+      weeklyViews:
+        0,
+
+      weeklyLikes:
+        0,
+
+      weeklySaves:
+        0,
+
+      weeklyPhotos:
+        0,
+
+      weeklyReviews:
+        0,
+
+      weeklyRatingAverage:
+        0,
+
+      calculatedAt:
+        null,
+
+      periodStart:
+        null,
+
+      periodEnd:
+        null,
     },
 
-   metrics: {
-  viewsCount: 0,
-  likesCount: 0,
-  savesCount: 0,
-  sharesCount: 0,
-  commentsCount: 0,
-  ratingsCount: 0,
-  reportsCount: 0,
-  ratingSum: 0,
-  internalRating: 0,
-  ratingConfidence: 0,
+    /*
+     * Contrato inicial de métricas.
+     *
+     * Los registradores incrementarán
+     * estos campos conforme existan
+     * interacciones y moderaciones.
+     */
+    metrics: {
+      viewsCount:
+        0,
 
-  photoProposalsCount: 0,
-  descriptionProposalsCount: 0,
+      likesCount:
+        0,
 
-  averageRating: 0,
-},
+      savesCount:
+        0,
 
-    openingHours: normalizedOpeningHours,
+      sharesCount:
+        0,
 
-    deletedAt: null,
+      commentsCount:
+        0,
 
-createdAt: now,
-updatedAt: now,
+      ratingsCount:
+        0,
 
-lastInteractionAt: now,
-activityStatusUpdatedAt: now,
-confirmationStartedAt: null,
+      ratingSum:
+        0,
 
-    photos: normalizedPhotos,
+      averageRating:
+        0,
+
+      internalRating:
+        0,
+
+      ratingConfidence:
+        0,
+
+      reportsCount:
+        0,
+
+      validReportsCount:
+        0,
+
+      dismissedReportsCount:
+        0,
+
+      photoProposalsCount:
+        0,
+
+      descriptionProposalsCount:
+        0,
+
+      recommendationsCount:
+        0,
+
+      recommendationsPositiveCount:
+        0,
+
+      recommendationRate:
+        0,
+    },
+
+    openingHours:
+      normalizedOpeningHours,
+
+    deletedAt:
+      null,
+
+    createdAt:
+      now,
+
+    updatedAt:
+      now,
+
+    lastInteractionAt:
+      now,
+
+    activityStatusUpdatedAt:
+      now,
+
+    confirmationStartedAt:
+      null,
+
+    photos:
+      normalizedPhotos,
+
     mainPhoto,
-    photoCount: normalizedPhotos.length,
+
+    photoCount:
+      normalizedPhotos.length,
   };
 
   const adminReference =
-  db
-    .collection(
-      ADMIN_USERS_COLLECTION,
-    )
-    .doc(
-      adminUid,
-    );
+    db
+      .collection(
+        ADMIN_USERS_COLLECTION,
+      )
+      .doc(
+        adminUid,
+      );
 
-const adminWeeklyActivityReference =
-  adminReference
-    .collection(
-      ADMIN_WEEKLY_ACTIVITY_COLLECTION,
-    )
-    .doc(
-      currentWeekId,
-    );
+  const adminWeeklyActivityReference =
+    adminReference
+      .collection(
+        ADMIN_WEEKLY_ACTIVITY_COLLECTION,
+      )
+      .doc(
+        currentWeekId,
+      );
 
   await db.runTransaction(
-  async (transaction) => {
-    transaction.set(
-      placeRef,
-      placeData,
-    );
+    async (
+      transaction,
+    ) => {
+      transaction.set(
+        placeRef,
+        placeData,
+      );
 
-    transaction.update(
-      candidateRef,
-      {
-        status:
-          "accepted",
+      transaction.update(
+        candidateRef,
+        {
+          status:
+            "accepted",
 
-        createdPlaceId:
-          placeId,
+          createdPlaceId:
+            placeId,
 
-        acceptedAt:
-          now,
+          acceptedAt:
+            now,
 
-        reviewedBy:
-          adminUid,
+          reviewedBy:
+            adminUid,
 
-        updatedAt:
-          now,
-      },
-    );
+          updatedAt:
+            now,
+        },
+      );
 
-    /*
-     * Contador total del administrador.
-     *
-     * Funciona tanto para admin como para
-     * super_admin porque ambos utilizan su UID.
-     */
-    transaction.set(
-      adminReference,
-      {
-        acceptedPlacesCount:
-          FieldValue.increment(1),
+      /*
+       * Contador total del administrador.
+       *
+       * Funciona tanto para admin como para
+       * super_admin porque ambos utilizan su UID.
+       */
+      transaction.set(
+        adminReference,
+        {
+          acceptedPlacesCount:
+            FieldValue
+              .increment(
+                1,
+              ),
 
-        updatedAt:
-          now,
-      },
-      {
-        merge: true,
-      },
-    );
+          updatedAt:
+            now,
+        },
+        {
+          merge:
+            true,
+        },
+      );
 
-    /*
-     * Historial semanal.
-     *
-     * Cada semana utiliza un documento diferente,
-     * por lo que no se requiere ningún job para
-     * reiniciar los contadores.
-     */
-    transaction.set(
-      adminWeeklyActivityReference,
-      {
-        weekId:
-          currentWeekId,
+      /*
+       * Historial semanal.
+       *
+       * Cada semana utiliza un documento diferente,
+       * por lo que no se requiere ningún job para
+       * reiniciar los contadores.
+       */
+      transaction.set(
+        adminWeeklyActivityReference,
+        {
+          weekId:
+            currentWeekId,
 
-        acceptedPlacesCount:
-          FieldValue.increment(1),
+          acceptedPlacesCount:
+            FieldValue
+              .increment(
+                1,
+              ),
 
-        updatedAt:
-          now,
-      },
-      {
-        merge: true,
-      },
-    );
-  },
-);
+          updatedAt:
+            now,
+        },
+        {
+          merge:
+            true,
+        },
+      );
+    },
+  );
 
- return {
-  placeId,
+  return {
+    placeId,
 
-  candidateId:
-    candidateRef.id,
+    candidateId:
+      candidateRef.id,
 
-  googlePlaceId,
+    googlePlaceId,
 
-  acceptedBy:
-    adminUid,
+    acceptedBy:
+      adminUid,
 
-  weekId:
-    currentWeekId,
-};
+    weekId:
+      currentWeekId,
+  };
 }

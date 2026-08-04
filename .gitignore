@@ -15,3 +15,4 @@ Thumbs.db
 
 # Build / dist (por si luego compilas)
 dist/
+generated/
