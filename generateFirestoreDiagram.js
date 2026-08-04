@@ -33,7 +33,7 @@ const DIAGRAMS_DIRECTORY =
 const DIAGRAM_GROUPS = [
   {
     fileName: "01-users-admin.mmd",
-    direction: "LR",
+    direction: "TB",
     collections: [
       {
         path: "user",
@@ -711,7 +711,7 @@ const lines = [
       'theme': 'base',
       'themeVariables': {
         'fontFamily': 'Arial',
-        'fontSize': '20px',
+        'fontSize': '38px',
         'lineColor': '#333333',
         'primaryTextColor': '#111111',
         'primaryBorderColor': '#444444',
@@ -719,8 +719,8 @@ const lines = [
       },
       'flowchart': {
         'htmlLabels': true,
-        'nodeSpacing': 120,
-        'rankSpacing': 150,
+        'nodeSpacing': 160,
+        'rankSpacing': 190,
         'curve': 'basis',
         'useMaxWidth': false
       }
@@ -755,13 +755,13 @@ const lines = [
         })
         .join("");
 
-    const content = [
-      "<div style='text-align:left; min-width:340px; font-family:Arial; font-size:20px; line-height:1.35;'>",
-      `<b>${title}</b><br/>`,
-      "────────────────<br/>",
-      fieldsHtml,
-      "</div>",
-    ].join("");
+   const content = [
+  "<div style='text-align:left; min-width:480px; font-family:Arial; font-size:28px; line-height:1.45;'>",
+  `<b style='font-size:42px;'>${title}</b><br/>`,
+  "────────────────────────<br/>",
+  fieldsHtml,
+  "</div>",
+].join("");
 
     lines.push(
       `  ${nodeId}["${content}"]`,

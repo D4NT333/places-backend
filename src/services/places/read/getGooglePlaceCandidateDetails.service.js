@@ -1,4 +1,6 @@
-import googleConfig, { validateGoogleConfig } from "../../../config/google.js";
+import googleConfig, {
+  validateGoogleConfig,
+} from "../../../config/google.js";
 
 const DETAILS_FIELD_MASK = [
   "id",
@@ -16,7 +18,9 @@ const DETAILS_FIELD_MASK = [
 ].join(",");
 
 const MAX_PHOTOS = 10;
-const DEFAULT_PHOTO_MAX_WIDTH = 900;
+
+const DEFAULT_PHOTO_MAX_WIDTH =
+  900;
 
 function getGooglePlacesBaseUrl() {
   return (
@@ -26,112 +30,312 @@ function getGooglePlacesBaseUrl() {
   );
 }
 
-function getPhotoMediaUrl(photoName, maxWidthPx = DEFAULT_PHOTO_MAX_WIDTH) {
-  if (!photoName) return null;
+function getPhotoMediaUrl(
+  photoName,
+  maxWidthPx =
+    DEFAULT_PHOTO_MAX_WIDTH,
+) {
+  if (!photoName) {
+    return null;
+  }
 
-  const baseUrl = getGooglePlacesBaseUrl();
+  const baseUrl =
+    getGooglePlacesBaseUrl();
 
-  return `${baseUrl}/${photoName}/media?maxWidthPx=${maxWidthPx}&key=${googleConfig.mapsApiKey}`;
+  return (
+    `${baseUrl}/${photoName}/media` +
+    `?maxWidthPx=${maxWidthPx}` +
+    `&key=${googleConfig.mapsApiKey}`
+  );
 }
 
-function mapPhoto(photo = {}) {
+function mapPhoto(
+  photo = {},
+) {
   return {
-    name: photo.name || null,
-    widthPx: photo.widthPx || null,
-    heightPx: photo.heightPx || null,
-    authorAttributions: Array.isArray(photo.authorAttributions)
-      ? photo.authorAttributions
-      : [],
-    photoUrl: getPhotoMediaUrl(photo.name),
+    name:
+      photo.name ||
+      null,
+
+    widthPx:
+      photo.widthPx ||
+      null,
+
+    heightPx:
+      photo.heightPx ||
+      null,
+
+    authorAttributions:
+      Array.isArray(
+        photo.authorAttributions,
+      )
+        ? photo.authorAttributions
+        : [],
+
+    photoUrl:
+      getPhotoMediaUrl(
+        photo.name,
+      ),
   };
 }
 
-function mapOpeningHours(openingHours = null) {
+function mapOpeningHours(
+  openingHours = null,
+) {
   if (!openingHours) {
     return {
-      openNow: null,
-      weekdayDescriptions: [],
-      periods: [],
+      openNow:
+        null,
+
+      weekdayDescriptions:
+        [],
+
+      periods:
+        [],
     };
   }
 
   return {
-    openNow: openingHours.openNow ?? null,
-    weekdayDescriptions: Array.isArray(openingHours.weekdayDescriptions)
-      ? openingHours.weekdayDescriptions
-      : [],
-    periods: Array.isArray(openingHours.periods) ? openingHours.periods : [],
+    openNow:
+      openingHours.openNow ??
+      null,
+
+    weekdayDescriptions:
+      Array.isArray(
+        openingHours.weekdayDescriptions,
+      )
+        ? openingHours
+            .weekdayDescriptions
+        : [],
+
+    periods:
+      Array.isArray(
+        openingHours.periods,
+      )
+        ? openingHours.periods
+        : [],
   };
 }
 
+/*
+ * Google no entrega una cantidad exacta.
+ *
+ * Entrega un nivel relativo de precio.
+ * Lo transformamos a una etiqueta clara
+ * sin alterar el tipo de dato esperado
+ * por el frontend.
+ */
+function mapGooglePriceLevel(
+  priceLevel,
+) {
+  if (!priceLevel) {
+    return null;
+  }
+
+  const normalizedPriceLevel =
+    String(
+      priceLevel,
+    )
+      .trim()
+      .toUpperCase();
+
+  const priceLevelLabels = {
+    PRICE_LEVEL_FREE:
+      "Gratis",
+
+    PRICE_LEVEL_INEXPENSIVE:
+      "Económico ($)",
+
+    PRICE_LEVEL_MODERATE:
+      "Moderado ($$)",
+
+    PRICE_LEVEL_EXPENSIVE:
+      "Costoso ($$$)",
+
+    PRICE_LEVEL_VERY_EXPENSIVE:
+      "Muy costoso ($$$$)",
+
+    "$":
+      "Económico ($)",
+
+    "$$":
+      "Moderado ($$)",
+
+    "$$$":
+      "Costoso ($$$)",
+
+    "$$$$":
+      "Muy costoso ($$$$)",
+  };
+
+  return (
+    priceLevelLabels[
+      normalizedPriceLevel
+    ] ||
+    String(
+      priceLevel,
+    )
+  );
+}
+
 export default async function getGooglePlaceCandidateDetailsService(
-  googlePlaceId
+  googlePlaceId,
 ) {
   validateGoogleConfig();
 
   if (!googlePlaceId) {
-    throw new Error("googlePlaceId is required");
-  }
-
-  const url = `${getGooglePlacesBaseUrl()}/places/${googlePlaceId}`;
-
-  console.log("Se ejecutó Google Place Details:", {
-  googlePlaceId,
-  fieldMask: DETAILS_FIELD_MASK,
-});
-
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": googleConfig.mapsApiKey,
-      "X-Goog-FieldMask": DETAILS_FIELD_MASK,
-    },
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    console.log("Google Place Details error:", data);
-
     throw new Error(
-      data?.error?.message || "Error al consultar detalles de Google Place"
+      "googlePlaceId is required",
     );
   }
 
-  const photos = Array.isArray(data.photos)
-    ? data.photos.slice(0, MAX_PHOTOS).map(mapPhoto)
-    : [];
+  const url =
+    `${getGooglePlacesBaseUrl()}` +
+    `/places/${googlePlaceId}`;
+
+  console.log(
+    "Se ejecutó Google Place Details:",
+    {
+      googlePlaceId,
+
+      fieldMask:
+        DETAILS_FIELD_MASK,
+    },
+  );
+
+  const response =
+    await fetch(
+      url,
+      {
+        method:
+          "GET",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+
+          "X-Goog-Api-Key":
+            googleConfig.mapsApiKey,
+
+          "X-Goog-FieldMask":
+            DETAILS_FIELD_MASK,
+        },
+      },
+    );
+
+  const data =
+    await response.json();
+
+  if (!response.ok) {
+    console.log(
+      "Google Place Details error:",
+      data,
+    );
+
+    throw new Error(
+      data?.error?.message ||
+        "Error al consultar detalles de Google Place",
+    );
+  }
+
+  const photos =
+    Array.isArray(
+      data.photos,
+    )
+      ? data.photos
+          .slice(
+            0,
+            MAX_PHOTOS,
+          )
+          .map(
+            mapPhoto,
+          )
+      : [];
 
   return {
-    googlePlaceId: data.id || googlePlaceId,
+    googlePlaceId:
+      data.id ||
+      googlePlaceId,
 
-    name: data.displayName?.text || "Sin nombre",
-    address: data.formattedAddress || "Sin dirección",
+    name:
+      data.displayName?.text ||
+      "Sin nombre",
 
-    location: data.location
-      ? {
-          latitude: data.location.latitude,
-          longitude: data.location.longitude,
-        }
-      : null,
+    address:
+      data.formattedAddress ||
+      "Sin dirección",
+
+    location:
+      data.location
+        ? {
+            latitude:
+              data.location.latitude,
+
+            longitude:
+              data.location.longitude,
+          }
+        : null,
 
     googleMainType:
       data.primaryType ||
-      (Array.isArray(data.types) ? data.types[0] : null) ||
+      (
+        Array.isArray(
+          data.types,
+        )
+          ? data.types[0]
+          : null
+      ) ||
       "Sin tipo",
 
-    types: Array.isArray(data.types) ? data.types : [],
+    types:
+      Array.isArray(
+        data.types,
+      )
+        ? data.types
+        : [],
 
-    rating: data.rating ?? null,
-    userRatingCount: data.userRatingCount ?? null,
-    priceLevel: data.priceLevel || null,
-    googleMapsUri: data.googleMapsUri || null,
+    rating:
+      data.rating ??
+      null,
 
-    openingHours: mapOpeningHours(data.regularOpeningHours),
+    userRatingCount:
+      data.userRatingCount ??
+      null,
+
+    /*
+     * Valor amigable para la interfaz.
+     *
+     * Ejemplo:
+     * PRICE_LEVEL_MODERATE
+     * se convierte en:
+     * Moderado ($$)
+     */
+    priceLevel:
+      mapGooglePriceLevel(
+        data.priceLevel,
+      ),
+
+    /*
+     * Conservamos también el valor original
+     * de Google para depuración o futuros usos.
+     */
+    priceLevelRaw:
+      data.priceLevel ||
+      null,
+
+    googleMapsUri:
+      data.googleMapsUri ||
+      null,
+
+    openingHours:
+      mapOpeningHours(
+        data.regularOpeningHours,
+      ),
 
     photos,
 
-    fetchedAt: new Date().toISOString(),
+    fetchedAt:
+      new Date()
+        .toISOString(),
   };
 }
