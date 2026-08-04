@@ -508,20 +508,23 @@ const currentWeekId =
       periodEnd: null,
     },
 
-    metrics: {
-      viewsCount: 0,
-      likesCount: 0,
-      savesCount: 0,
-      sharesCount: 0,
-      commentsCount: 0,
-      ratingsCount: 0,
-      reportsCount: 0,
-      ratingSum: 0,
-      internalRating: 0,
-      ratingConfidence: 0,
-      photoProposalsCount: 0,
-      averageRating: 0,
-    },
+   metrics: {
+  viewsCount: 0,
+  likesCount: 0,
+  savesCount: 0,
+  sharesCount: 0,
+  commentsCount: 0,
+  ratingsCount: 0,
+  reportsCount: 0,
+  ratingSum: 0,
+  internalRating: 0,
+  ratingConfidence: 0,
+
+  photoProposalsCount: 0,
+  descriptionProposalsCount: 0,
+
+  averageRating: 0,
+},
 
     openingHours: normalizedOpeningHours,
 
