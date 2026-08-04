@@ -4,73 +4,170 @@ import {
   cellToChildren,
 } from "h3-js";
 
-import { db, FieldValue } from "../../../config/firebase.js";
+import {
+  db,
+  FieldValue,
+} from "../../../config/firebase.js";
+
 import processSearchHexService from "./googleImport/processSearchHex.service.js";
 
 const INITIAL_SEARCH_RESOLUTION = 8;
-const MAX_SEARCH_RESOLUTION = 8;
+const MAX_SEARCH_RESOLUTION = 11;
 
-const CANDIDATES_COLLECTION = "candidatesPlaces";
+/*
+ * Protecciones globales para una ejecución.
+ *
+ * La búsqueda se detiene cuando se alcanza
+ * cualquiera de estos dos límites.
+ */
+const MAX_GOOGLE_REQUESTS_PER_DISCOVERY = 300;
+const MAX_UNIQUE_PLACES_PER_DISCOVERY = 2000;
+
+const CANDIDATES_COLLECTION =
+  "candidatesPlaces";
+
 const REJECTED_GOOGLE_PLACES_COLLECTION =
   "rejectedGooglePlaces";
-const DEFAULT_STATUS = "in_review";
-const DEFAULT_SOURCE = "google";
-const DEFAULT_IMPORTED_BY = "admin_uid_or_system";
+
+const DEFAULT_STATUS =
+  "in_review";
+
+const DEFAULT_SOURCE =
+  "google";
+
+const DEFAULT_IMPORTED_BY =
+  "admin_uid_or_system";
 
 const GOOGLE_DATA_TTL_DAYS = 20;
 
-function chunkArray(array = [], size = 30) {
+function chunkArray(
+  array = [],
+  size = 30,
+) {
   const chunks = [];
 
-  for (let i = 0; i < array.length; i += size) {
-    chunks.push(array.slice(i, i + size));
+  for (
+    let index = 0;
+    index < array.length;
+    index += size
+  ) {
+    chunks.push(
+      array.slice(
+        index,
+        index + size,
+      ),
+    );
   }
 
   return chunks;
 }
 
 function getGoogleDataExpiresAt() {
-  return new Date(Date.now() + GOOGLE_DATA_TTL_DAYS * 24 * 60 * 60 * 1000);
+  return new Date(
+    Date.now() +
+      GOOGLE_DATA_TTL_DAYS *
+        24 *
+        60 *
+        60 *
+        1000,
+  );
 }
 
-function getGooglePlaceName(place = {}) {
-  return place.displayName?.text || "Sin nombre";
+function getGooglePlaceName(
+  place = {},
+) {
+  return (
+    place.displayName?.text ||
+    "Sin nombre"
+  );
 }
 
-function getGooglePlaceAddress(place = {}) {
-  return place.formattedAddress || "Sin dirección";
+function getGooglePlaceAddress(
+  place = {},
+) {
+  return (
+    place.formattedAddress ||
+    "Sin dirección"
+  );
 }
 
-function getGoogleMainType(place = {}) {
-  if (!Array.isArray(place.types)) return "Sin tipo";
+function getGoogleMainType(
+  place = {},
+) {
+  if (
+    !Array.isArray(
+      place.types,
+    )
+  ) {
+    return "Sin tipo";
+  }
 
-  return place.types[0] || "Sin tipo";
+  return (
+    place.types[0] ||
+    "Sin tipo"
+  );
 }
 
-function getGoogleTypes(place = {}) {
-  return Array.isArray(place.types) ? place.types : [];
+function getGoogleTypes(
+  place = {},
+) {
+  return Array.isArray(
+    place.types,
+  )
+    ? place.types
+    : [];
 }
 
-async function getExistingCandidatePlaceIds(googlePlaceIds = []) {
-  if (googlePlaceIds.length === 0) {
+async function getExistingCandidatePlaceIds(
+  googlePlaceIds = [],
+) {
+  if (
+    googlePlaceIds.length === 0
+  ) {
     return new Set();
   }
 
-  const existingIds = new Set();
-  const chunks = chunkArray(googlePlaceIds, 30);
+  const existingIds =
+    new Set();
 
-  for (const chunk of chunks) {
-    const refs = chunk.map((googlePlaceId) =>
-      db.collection(CANDIDATES_COLLECTION).doc(googlePlaceId)
+  const chunks =
+    chunkArray(
+      googlePlaceIds,
+      30,
     );
 
-    const snapshots = await db.getAll(...refs);
+  for (
+    const chunk
+    of chunks
+  ) {
+    const references =
+      chunk.map(
+        (googlePlaceId) =>
+          db
+            .collection(
+              CANDIDATES_COLLECTION,
+            )
+            .doc(
+              googlePlaceId,
+            ),
+      );
 
-    snapshots.forEach((snapshot) => {
-      if (snapshot.exists) {
-        existingIds.add(snapshot.id);
-      }
-    });
+    const snapshots =
+      await db.getAll(
+        ...references,
+      );
+
+    snapshots.forEach(
+      (snapshot) => {
+        if (
+          snapshot.exists
+        ) {
+          existingIds.add(
+            snapshot.id,
+          );
+        }
+      },
+    );
   }
 
   return existingIds;
@@ -79,7 +176,9 @@ async function getExistingCandidatePlaceIds(googlePlaceIds = []) {
 async function getRejectedGooglePlaceIds(
   googlePlaceIds = [],
 ) {
-  if (googlePlaceIds.length === 0) {
+  if (
+    googlePlaceIds.length === 0
+  ) {
     return new Set();
   }
 
@@ -92,7 +191,10 @@ async function getRejectedGooglePlaceIds(
       30,
     );
 
-  for (const chunk of chunks) {
+  for (
+    const chunk
+    of chunks
+  ) {
     const references =
       chunk.map(
         (googlePlaceId) =>
@@ -112,7 +214,9 @@ async function getRejectedGooglePlaceIds(
 
     snapshots.forEach(
       (snapshot) => {
-        if (snapshot.exists) {
+        if (
+          snapshot.exists
+        ) {
           rejectedIds.add(
             snapshot.id,
           );
@@ -134,7 +238,10 @@ function splitCandidatePlaces({
   const newPlaces = [];
   const skippedPlaces = [];
 
-  for (const place of places) {
+  for (
+    const place
+    of places
+  ) {
     const googlePlaceId =
       place?.id;
 
@@ -151,12 +258,8 @@ function splitCandidatePlaces({
     }
 
     /*
-     * Primero revisamos la lista permanente
-     * de lugares rechazados.
-     *
-     * Así el motivo registrado será
-     * "previously_rejected", aunque el candidato
-     * todavía exista en candidatesPlaces.
+     * Primero se revisa la lista
+     * permanente de rechazados.
      */
     if (
       rejectedGooglePlaceIds.has(
@@ -174,8 +277,8 @@ function splitCandidatePlaces({
     }
 
     /*
-     * Después evitamos duplicar candidatos
-     * pendientes, aceptados o ya registrados.
+     * Después se evita registrar otra vez
+     * un candidato existente.
      */
     if (
       existingCandidateIds.has(
@@ -209,25 +312,57 @@ function buildCandidateData({
   importedBy,
 }) {
   return {
-    googlePlaceId: place.id,
+    googlePlaceId:
+      place.id,
 
-    // Snapshot soft de Google.
-    // Lo guardamos porque ya vino en la consulta Nearby Search.
-    name: getGooglePlaceName(place),
-    address: getGooglePlaceAddress(place),
-    googleMainType: getGoogleMainType(place),
-    types: getGoogleTypes(place),
+    /*
+     * Snapshot ligero obtenido durante
+     * Nearby Search.
+     */
+    name:
+      getGooglePlaceName(
+        place,
+      ),
 
-    status: DEFAULT_STATUS,
-    source: DEFAULT_SOURCE,
+    address:
+      getGooglePlaceAddress(
+        place,
+      ),
+
+    googleMainType:
+      getGoogleMainType(
+        place,
+      ),
+
+    types:
+      getGoogleTypes(
+        place,
+      ),
+
+    status:
+      DEFAULT_STATUS,
+
+    source:
+      DEFAULT_SOURCE,
+
     parentHexId,
+
     importedBy,
 
-    googleDataFetchedAt: FieldValue.serverTimestamp(),
-    googleDataExpiresAt: getGoogleDataExpiresAt(),
+    googleDataFetchedAt:
+      FieldValue
+        .serverTimestamp(),
 
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
+    googleDataExpiresAt:
+      getGoogleDataExpiresAt(),
+
+    createdAt:
+      FieldValue
+        .serverTimestamp(),
+
+    updatedAt:
+      FieldValue
+        .serverTimestamp(),
   };
 }
 
@@ -237,15 +372,40 @@ function buildRegisteredCandidateResponse({
   importedBy,
 }) {
   return {
-    id: place.id,
-    googlePlaceId: place.id,
-    name: getGooglePlaceName(place),
-    address: getGooglePlaceAddress(place),
-    googleMainType: getGoogleMainType(place),
-    types: getGoogleTypes(place),
-    status: DEFAULT_STATUS,
-    source: DEFAULT_SOURCE,
+    id:
+      place.id,
+
+    googlePlaceId:
+      place.id,
+
+    name:
+      getGooglePlaceName(
+        place,
+      ),
+
+    address:
+      getGooglePlaceAddress(
+        place,
+      ),
+
+    googleMainType:
+      getGoogleMainType(
+        place,
+      ),
+
+    types:
+      getGoogleTypes(
+        place,
+      ),
+
+    status:
+      DEFAULT_STATUS,
+
+    source:
+      DEFAULT_SOURCE,
+
     parentHexId,
+
     importedBy,
   };
 }
@@ -253,40 +413,69 @@ function buildRegisteredCandidateResponse({
 async function registerCandidatePlaces({
   places = [],
   parentHexId,
-  importedBy = DEFAULT_IMPORTED_BY,
+  importedBy =
+    DEFAULT_IMPORTED_BY,
 }) {
-  if (places.length === 0) {
+  if (
+    places.length === 0
+  ) {
     return {
       registeredCount: 0,
       registeredCandidates: [],
     };
   }
 
-  // Firestore batch permite máximo 500 operaciones.
-  // Usamos 450 por seguridad.
-  const batches = chunkArray(places, 450);
-  const registeredCandidates = [];
+  /*
+   * Firestore permite hasta 500 operaciones
+   * por batch. Se dejan 450 por seguridad.
+   */
+  const batches =
+    chunkArray(
+      places,
+      450,
+    );
 
-  for (const batchPlaces of batches) {
-    const batch = db.batch();
+  const registeredCandidates =
+    [];
 
-    for (const place of batchPlaces) {
-      const candidateRef = db.collection(CANDIDATES_COLLECTION).doc(place.id);
+  for (
+    const batchPlaces
+    of batches
+  ) {
+    const batch =
+      db.batch();
 
-      const candidateData = buildCandidateData({
-        place,
-        parentHexId,
-        importedBy,
-      });
+    for (
+      const place
+      of batchPlaces
+    ) {
+      const candidateReference =
+        db
+          .collection(
+            CANDIDATES_COLLECTION,
+          )
+          .doc(
+            place.id,
+          );
 
-      batch.set(candidateRef, candidateData);
+      const candidateData =
+        buildCandidateData({
+          place,
+          parentHexId,
+          importedBy,
+        });
+
+      batch.set(
+        candidateReference,
+        candidateData,
+      );
 
       registeredCandidates.push(
         buildRegisteredCandidateResponse({
           place,
           parentHexId,
           importedBy,
-        })
+        }),
       );
     }
 
@@ -294,158 +483,358 @@ async function registerCandidatePlaces({
   }
 
   return {
-    registeredCount: registeredCandidates.length,
+    registeredCount:
+      registeredCandidates.length,
+
     registeredCandidates,
   };
 }
 
 export default async function createPlaceCandidateService(
   hexId,
-  options = {}
+  options = {},
 ) {
-  const importedBy = options.importedBy || DEFAULT_IMPORTED_BY;
+  const importedBy =
+    options.importedBy ||
+    DEFAULT_IMPORTED_BY;
 
   if (!hexId) {
-    throw new Error("hexId is required");
+    throw new Error(
+      "hexId is required",
+    );
   }
 
-  if (!isValidCell(hexId)) {
-    throw new Error("Invalid H3 hexId");
+  if (
+    !isValidCell(
+      hexId,
+    )
+  ) {
+    throw new Error(
+      "Invalid H3 hexId",
+    );
   }
 
-  const resolution = getResolution(hexId);
+  const resolution =
+    getResolution(
+      hexId,
+    );
 
-  if (resolution !== 7) {
-    throw new Error(`Expected H7 hex, received H${resolution}`);
+  if (
+    resolution !== 7
+  ) {
+    throw new Error(
+      `Expected H7 hex, received H${resolution}`,
+    );
   }
 
-  const h8Children = cellToChildren(hexId, INITIAL_SEARCH_RESOLUTION);
+  /*
+   * La zona seleccionada es H7.
+   * La exploración comienza consultando
+   * todos sus hijos H8.
+   */
+  const initialSearchHexes =
+    cellToChildren(
+      hexId,
+      INITIAL_SEARCH_RESOLUTION,
+    );
 
   const processedHexes = [];
-  const placesMap = new Map();
 
-  for (const h8HexId of h8Children) {
-    const result = await processSearchHexService({
-      hexId: h8HexId,
-      maxResolution: MAX_SEARCH_RESOLUTION,
-    });
+  /*
+   * Este Map es el deduplicador global
+   * de toda la ejecución.
+   *
+   * Un Google Place ID solamente puede
+   * existir una vez dentro del resultado.
+   */
+  const placesMap =
+    new Map();
 
-    processedHexes.push(...result.processedHexes);
+  /*
+   * Contexto compartido entre todas las
+   * ramas de la búsqueda recursiva.
+   *
+   * Esto permite aplicar límites globales,
+   * no límites independientes por cada H8.
+   */
+  const discoveryContext = {
+    googleRequestsCount: 0,
 
-    for (const place of result.places) {
-      if (place.id) {
-        placesMap.set(place.id, place);
+    uniquePlacesMap:
+      placesMap,
+
+    stoppedByRequestLimit:
+      false,
+
+    stoppedByPlacesLimit:
+      false,
+  };
+
+  for (
+    const searchHexId
+    of initialSearchHexes
+  ) {
+    /*
+     * Si una rama anterior alcanzó alguno
+     * de los límites, ya no comenzamos
+     * otra rama H8.
+     */
+    if (
+      discoveryContext
+        .stoppedByRequestLimit ||
+      discoveryContext
+        .stoppedByPlacesLimit
+    ) {
+      break;
+    }
+
+    const result =
+      await processSearchHexService({
+        hexId:
+          searchHexId,
+
+        maxResolution:
+          MAX_SEARCH_RESOLUTION,
+
+        context:
+          discoveryContext,
+
+        maxGoogleRequests:
+          MAX_GOOGLE_REQUESTS_PER_DISCOVERY,
+
+        maxUniquePlaces:
+          MAX_UNIQUE_PLACES_PER_DISCOVERY,
+      });
+
+    processedHexes.push(
+      ...result.processedHexes,
+    );
+
+    /*
+     * processSearchHexService ya agregó
+     * los resultados al Map global.
+     *
+     * Este recorrido se conserva para
+     * mantener el mismo comportamiento
+     * y formato de retorno que existía.
+     */
+    for (
+      const place
+      of result.places
+    ) {
+      if (
+        place?.id &&
+        placesMap.size <
+          MAX_UNIQUE_PLACES_PER_DISCOVERY
+      ) {
+        placesMap.set(
+          place.id,
+          place,
+        );
       }
     }
   }
 
-  const googlePlaces = Array.from(placesMap.values());
+  /*
+   * Aquí ya están deduplicados todos
+   * los resultados por Google Place ID.
+   */
+  const googlePlaces =
+    Array.from(
+      placesMap.values(),
+    );
 
-  const googlePlaceIds = googlePlaces
-    .map((place) => place.id)
-    .filter(Boolean);
+  const googlePlaceIds =
+    googlePlaces
+      .map(
+        (place) =>
+          place.id,
+      )
+      .filter(
+        Boolean,
+      );
 
- const [
-  existingCandidateIds,
-  rejectedGooglePlaceIds,
-] = await Promise.all([
-  getExistingCandidatePlaceIds(
-    googlePlaceIds,
-  ),
+  const [
+    existingCandidateIds,
+    rejectedGooglePlaceIds,
+  ] = await Promise.all([
+    getExistingCandidatePlaceIds(
+      googlePlaceIds,
+    ),
 
-  getRejectedGooglePlaceIds(
-    googlePlaceIds,
-  ),
-]);
+    getRejectedGooglePlaceIds(
+      googlePlaceIds,
+    ),
+  ]);
 
-const {
-  newPlaces,
-  skippedPlaces,
-} = splitCandidatePlaces({
-  places:
-    googlePlaces,
+  const {
+    newPlaces,
+    skippedPlaces,
+  } = splitCandidatePlaces({
+    places:
+      googlePlaces,
 
-  existingCandidateIds,
+    existingCandidateIds,
 
-  rejectedGooglePlaceIds,
-});
-
-  const registerResult = await registerCandidatePlaces({
-    places: newPlaces,
-    parentHexId: hexId,
-    importedBy,
+    rejectedGooglePlaceIds,
   });
 
+  const registerResult =
+    await registerCandidatePlaces({
+      places:
+        newPlaces,
+
+      parentHexId:
+        hexId,
+
+      importedBy,
+    });
+
   const skippedExistingCandidatesCount =
-  skippedPlaces.filter(
-    (place) =>
-      place.skippedReason ===
-      "already_exists_in_candidates_places",
-  ).length;
+    skippedPlaces.filter(
+      (place) =>
+        place.skippedReason ===
+        "already_exists_in_candidates_places",
+    ).length;
 
-const skippedRejectedPlacesCount =
-  skippedPlaces.filter(
-    (place) =>
-      place.skippedReason ===
-      "previously_rejected",
-  ).length;
+  const skippedRejectedPlacesCount =
+    skippedPlaces.filter(
+      (place) =>
+        place.skippedReason ===
+        "previously_rejected",
+    ).length;
 
-const skippedWithoutGoogleIdCount =
-  skippedPlaces.filter(
-    (place) =>
-      place.skippedReason ===
-      "missing_google_place_id",
-  ).length;
+  const skippedWithoutGoogleIdCount =
+    skippedPlaces.filter(
+      (place) =>
+        place.skippedReason ===
+        "missing_google_place_id",
+    ).length;
+
+  let stoppedReason =
+    "completed";
+
+  if (
+    discoveryContext
+      .stoppedByRequestLimit
+  ) {
+    stoppedReason =
+      "google_request_limit";
+  } else if (
+    discoveryContext
+      .stoppedByPlacesLimit
+  ) {
+    stoppedReason =
+      "unique_places_limit";
+  }
 
   return {
-    parentHexId: hexId,
-    parentResolution: 7,
-    initialSearchResolution: INITIAL_SEARCH_RESOLUTION,
-    maxSearchResolution: MAX_SEARCH_RESOLUTION,
-    initialChildrenCount: h8Children.length,
-    processedHexesCount: processedHexes.length,
+    parentHexId:
+      hexId,
 
-    googlePlacesCount: googlePlaces.length,
-    newPlacesCount: newPlaces.length,
-    skippedPlacesCount: skippedPlaces.length,
-    registeredCandidatesCount: registerResult.registeredCount,
+    parentResolution:
+      resolution,
 
+    initialSearchResolution:
+      INITIAL_SEARCH_RESOLUTION,
+
+    maxSearchResolution:
+      MAX_SEARCH_RESOLUTION,
+
+    initialChildrenCount:
+      initialSearchHexes.length,
+
+    processedHexesCount:
+      processedHexes.length,
+
+    googleRequestsCount:
+      discoveryContext
+        .googleRequestsCount,
+
+    googlePlacesCount:
+      googlePlaces.length,
+
+    newPlacesCount:
+      newPlaces.length,
+
+    skippedPlacesCount:
+      skippedPlaces.length,
+
+    registeredCandidatesCount:
+      registerResult
+        .registeredCount,
+
+    stoppedByRequestLimit:
+      discoveryContext
+        .stoppedByRequestLimit,
+
+    stoppedByPlacesLimit:
+      discoveryContext
+        .stoppedByPlacesLimit,
+
+    stoppedReason,
+
+    limits: {
+      maxGoogleRequests:
+        MAX_GOOGLE_REQUESTS_PER_DISCOVERY,
+
+      maxUniquePlaces:
+        MAX_UNIQUE_PLACES_PER_DISCOVERY,
+    },
+
+    /*
+     * Se mantienen estas propiedades
+     * para no romper el comportamiento
+     * que ya tenía el servicio.
+     */
     processedHexes,
 
-    // Lugares nuevos crudos de Google. Útiles para debug.
-    places: newPlaces,
+    places:
+      newPlaces,
 
-    // Candidatos ya registrados con snapshot soft.
-    registeredCandidates: registerResult.registeredCandidates,
+    registeredCandidates:
+      registerResult
+        .registeredCandidates,
 
     skippedPlaces,
 
     stats: {
-  googlePlacesReceived:
-    googlePlaces.length,
+      googleRequests:
+        discoveryContext
+          .googleRequestsCount,
 
-  uniqueGooglePlacesInRun:
-    googlePlaces.length,
+      googlePlacesReceived:
+        googlePlaces.length,
 
-  alreadyExistingInCandidatesPlaces:
-    skippedExistingCandidatesCount,
+      uniqueGooglePlacesInRun:
+        googlePlaces.length,
 
-  previouslyRejected:
-    skippedRejectedPlacesCount,
+      alreadyExistingInCandidatesPlaces:
+        skippedExistingCandidatesCount,
 
-  missingGooglePlaceId:
-    skippedWithoutGoogleIdCount,
+      previouslyRejected:
+        skippedRejectedPlacesCount,
 
-  totalSkipped:
-    skippedPlaces.length,
+      missingGooglePlaceId:
+        skippedWithoutGoogleIdCount,
 
-  readyToReview:
-    newPlaces.length,
+      totalSkipped:
+        skippedPlaces.length,
 
-  registeredInCandidatesPlaces:
-    registerResult.registeredCount,
-},
+      readyToReview:
+        newPlaces.length,
 
-    status: "ok",
+      registeredInCandidatesPlaces:
+        registerResult
+          .registeredCount,
+
+      processedHexes:
+        processedHexes.length,
+
+      stoppedReason,
+    },
+
+    status:
+      "ok",
   };
 }
