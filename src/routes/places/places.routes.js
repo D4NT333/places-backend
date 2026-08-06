@@ -60,7 +60,7 @@ router.get("/admin/google-places/candidates/:googlePlaceId/details", verifyFireb
 
 router.post("/admin/google-places/register-from-candidate", verifyFirebaseToken, verifyActiveAdmin, registerPlaceFromCandidateController);
 
-router.get("/feed", getPlacesFeedController);
+router.get("/feed", verifyFirebaseToken, getPlacesFeedController);
 
 router.get("/photos/google", getGooglePlacePhotoController);
 

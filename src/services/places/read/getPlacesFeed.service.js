@@ -7,6 +7,12 @@ import {
   db,
 } from "../../../config/firebase.js";
 
+import buildPersonalizedFeedOrderService from "../../recommendations/buildPersonalizedFeedOrder.service.js";
+
+import {
+  RECOMMENDATION_PROFILE_DOCUMENT,
+} from "../../../config/recommendations/recommendationProfile.config.js";
+
 const DEFAULT_LIMIT =
   100;
 
@@ -1047,11 +1053,45 @@ function mapPlaceForFeed({
   };
 }
 
+async function getUserRecommendationProfile(
+  uid,
+) {
+  const normalizedUid =
+    cleanText(
+      uid,
+    );
+
+  if (!normalizedUid) {
+    return null;
+  }
+
+  const profileSnapshot =
+    await db
+      .collection("user")
+      .doc(normalizedUid)
+      .collection(
+        RECOMMENDATION_PROFILE_DOCUMENT
+          .subcollection,
+      )
+      .doc(
+        RECOMMENDATION_PROFILE_DOCUMENT
+          .documentId,
+      )
+      .get();
+
+  if (!profileSnapshot.exists) {
+    return null;
+  }
+
+  return profileSnapshot.data();
+}
+
 export default async function getPlacesFeedService({
   latitude,
   longitude,
   limit,
   cursor,
+  uid,
 } = {}) {
   const normalizedLatitude =
     normalizeCoordinate(
@@ -1090,6 +1130,23 @@ export default async function getPlacesFeedService({
       cursor,
     );
 
+    const normalizedUid =
+  cleanText(
+    uid,
+  );
+
+if (!normalizedUid) {
+  const error =
+    new Error(
+      "El usuario autenticado es obligatorio para generar el feed.",
+    );
+
+  error.statusCode =
+    401;
+
+  throw error;
+}
+
   const nearbyDocuments =
     await getNearbyPlaceDocuments({
       latitude:
@@ -1121,14 +1178,27 @@ export default async function getPlacesFeedService({
     );
 
   const totalAvailable =
-    candidatesInsideRadius.length;
+  candidatesInsideRadius.length;
 
-  const selectedCandidates =
-    candidatesInsideRadius.slice(
-      cursorOffset,
-      cursorOffset +
-        safeLimit,
-    );
+const recommendationProfile =
+  await getUserRecommendationProfile(
+    normalizedUid,
+  );
+
+const personalizedCandidates =
+  buildPersonalizedFeedOrderService({
+    candidates:
+      candidatesInsideRadius,
+
+    recommendationProfile,
+  });
+
+const selectedCandidates =
+  personalizedCandidates.slice(
+    cursorOffset,
+    cursorOffset +
+      safeLimit,
+  );
 
   const selectedDocuments =
     selectedCandidates.map(
@@ -1201,6 +1271,26 @@ export default async function getPlacesFeedService({
     totalAvailable,
 
     insufficientResults,
+
+    personalization: {
+  enabled:
+    Boolean(
+      recommendationProfile
+        ?.dominantProfileId &&
+      recommendationProfile
+        ?.dominantSubprofileId,
+    ),
+
+  dominantProfileId:
+    recommendationProfile
+      ?.dominantProfileId ||
+    null,
+
+  dominantSubprofileId:
+    recommendationProfile
+      ?.dominantSubprofileId ||
+    null,
+},
 
     message:
       insufficientResults

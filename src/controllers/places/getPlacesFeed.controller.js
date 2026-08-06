@@ -13,12 +13,28 @@ export default async function getPlacesFeedController(
       cursor,
     } = req.query;
 
+    const uid =
+      typeof req.user?.uid === "string"
+        ? req.user.uid.trim()
+        : "";
+
+    if (!uid) {
+      const error = new Error(
+        "El usuario autenticado es obligatorio para generar el feed.",
+      );
+
+      error.statusCode = 401;
+
+      throw error;
+    }
+
     const result =
       await getPlacesFeedService({
         latitude,
         longitude,
         limit,
         cursor,
+        uid,
       });
 
     return res
