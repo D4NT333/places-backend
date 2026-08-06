@@ -30,11 +30,17 @@ export function normalizeRecommendationValue(value) {
     .replace(/&/g, " y ")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .replace(/_+/g, "_");
+    .replace(/_+/g, "_")
+    .replace(/^subtag_/, "")
+    .replace(/^approach_/, "")
+    .replace(/^tag_/, "");
 }
 
 export function extractRecommendationValues(value) {
-  if (value === null || value === undefined) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
     return [];
   }
 
@@ -76,39 +82,19 @@ export function extractRecommendationValues(value) {
   });
 }
 
-export function normalizeRecommendationValue(value) {
-  if (
-    typeof value !== "string" &&
-    typeof value !== "number"
-  ) {
-    return "";
-  }
+export function normalizeRecommendationValues(
+  values,
+  aliases = {},
+) {
+  const normalizedValues =
+    extractRecommendationValues(values)
+      .map(normalizeRecommendationValue)
+      .map((value) => aliases[value] || value)
+      .filter(Boolean);
 
-  return String(value)
-    .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/&/g, " y ")
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .replace(/_+/g, "_")
-    /*
-     * Los catálogos de Firestore utilizan IDs como:
-     *
-     * tag_art
-     * subtag_tacos
-     * approach_local
-     *
-     * La matriz utiliza IDs internos limpios:
-     *
-     * art
-     * tacos
-     * local
-     */
-    .replace(/^subtag_/, "")
-    .replace(/^approach_/, "")
-    .replace(/^tag_/, "");
+  return [
+    ...new Set(normalizedValues),
+  ];
 }
 
 export function firstValidRecommendationValue({
@@ -116,13 +102,16 @@ export function firstValidRecommendationValue({
   allowedValues,
   aliases = {},
 }) {
-  const allowedSet = new Set(allowedValues);
+  const allowedSet =
+    new Set(allowedValues);
 
   return (
     normalizeRecommendationValues(
       values,
       aliases,
-    ).find((value) => allowedSet.has(value)) ||
+    ).find((value) =>
+      allowedSet.has(value)
+    ) ||
     null
   );
 }
