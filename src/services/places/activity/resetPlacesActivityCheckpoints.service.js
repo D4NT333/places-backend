@@ -10,8 +10,11 @@ import {
 const PLACES_COLLECTION =
   "places";
 
-const DEFAULT_BATCH_SIZE =
-  100;
+/*
+ * Único lugar que será procesado por este job.
+ */
+const TARGET_PLACE_ID =
+  "1sHxSkZlCNaMfMh16T5i";
 
 function cleanText(value) {
   return typeof value === "string"
@@ -94,7 +97,9 @@ function timestampToMilliseconds(
       .getTime();
   }
 
-  if (value instanceof Date) {
+  if (
+    value instanceof Date
+  ) {
     return value.getTime();
   }
 
@@ -128,8 +133,8 @@ function buildActivityCheckpoint(
       [],
 
     /*
-     * Este campo permite saber cuándo se
-     * reinició por última vez en modo demo.
+     * Permite conocer cuándo se reinició
+     * el checkpoint por última vez.
      */
     updatedAt:
       FieldValue.serverTimestamp(),
@@ -229,129 +234,10 @@ export default async function resetPlacesActivityCheckpointsService() {
       currentDate,
     );
 
-  let lastDocument = null;
+  const result = {
+    targetPlaceId:
+      TARGET_PLACE_ID,
 
-  let processedCount =
-    0;
-
-  let updatedCount =
-    0;
-
-  let skippedCount =
-    0;
-
-  do {
-    let query =
-      db
-        .collection(
-          PLACES_COLLECTION,
-        )
-        .orderBy(
-          "__name__",
-        )
-        .limit(
-          DEFAULT_BATCH_SIZE,
-        );
-
-    if (lastDocument) {
-      query =
-        query.startAfter(
-          lastDocument,
-        );
-    }
-
-    const snapshot =
-      await query.get();
-
-    if (snapshot.empty) {
-      break;
-    }
-
-    for (
-      const placeDocument
-      of snapshot.docs
-    ) {
-      processedCount += 1;
-
-      const wasUpdated =
-        await db.runTransaction(
-          async (
-            transaction,
-          ) => {
-            const freshSnapshot =
-              await transaction.get(
-                placeDocument.ref,
-              );
-
-            if (
-              !freshSnapshot.exists
-            ) {
-              return false;
-            }
-
-            const place =
-              freshSnapshot.data();
-
-            /*
-             * No procesamos documentos eliminados.
-             */
-            if (place.deletedAt) {
-              return false;
-            }
-
-            const shouldReset =
-              shouldResetCheckpoint({
-                place,
-                mode,
-                currentWeekId,
-                nowMs,
-                demoIntervalMs,
-              });
-
-            if (!shouldReset) {
-              return false;
-            }
-
-            transaction.update(
-              freshSnapshot.ref,
-              {
-                activityCheckpoint:
-                  buildActivityCheckpoint(
-                    currentWeekId,
-                  ),
-
-                updatedAt:
-                  FieldValue
-                    .serverTimestamp(),
-              },
-            );
-
-            return true;
-          },
-        );
-
-      if (wasUpdated) {
-        updatedCount += 1;
-      } else {
-        skippedCount += 1;
-      }
-    }
-
-    lastDocument =
-      snapshot.docs[
-        snapshot.docs.length -
-          1
-      ];
-
-    if (
-      snapshot.size <
-      DEFAULT_BATCH_SIZE
-    ) {
-      break;
-    }
-  } while (lastDocument);
-
-  return {
     mode,
 
     currentWeekId,
@@ -361,10 +247,118 @@ export default async function resetPlacesActivityCheckpointsService() {
         ? demoMinutes
         : null,
 
-    processedCount,
+    processedCount: 0,
+    updatedCount: 0,
+    skippedCount: 0,
+    notFoundCount: 0,
+  };
 
-    updatedCount,
+  /*
+   * Se obtiene directamente el lugar objetivo.
+   * No se consulta toda la colección.
+   */
+  const placeReference =
+    db
+      .collection(
+        PLACES_COLLECTION,
+      )
+      .doc(
+        TARGET_PLACE_ID,
+      );
 
-    skippedCount,
+  const placeSnapshot =
+    await placeReference.get();
+
+  if (
+    !placeSnapshot.exists
+  ) {
+    result.notFoundCount = 1;
+
+    return {
+      ...result,
+
+      message:
+        "El lugar objetivo no existe.",
+    };
+  }
+
+  result.processedCount = 1;
+
+  const wasUpdated =
+    await db.runTransaction(
+      async (
+        transaction,
+      ) => {
+        const freshSnapshot =
+          await transaction.get(
+            placeReference,
+          );
+
+        if (
+          !freshSnapshot.exists
+        ) {
+          return false;
+        }
+
+        const place =
+          freshSnapshot.data();
+
+        /*
+         * No procesamos documentos eliminados.
+         */
+        if (
+          place.deletedAt
+        ) {
+          return false;
+        }
+
+        const shouldReset =
+          shouldResetCheckpoint({
+            place,
+            mode,
+            currentWeekId,
+            nowMs,
+            demoIntervalMs,
+          });
+
+        if (
+          !shouldReset
+        ) {
+          return false;
+        }
+
+        transaction.update(
+          freshSnapshot.ref,
+          {
+            activityCheckpoint:
+              buildActivityCheckpoint(
+                currentWeekId,
+              ),
+
+            updatedAt:
+              FieldValue
+                .serverTimestamp(),
+          },
+        );
+
+        return true;
+      },
+    );
+
+  if (
+    wasUpdated
+  ) {
+    result.updatedCount = 1;
+  } else {
+    result.skippedCount = 1;
+  }
+
+  return {
+    ...result,
+
+    message:
+      wasUpdated
+        ? "El checkpoint del lugar objetivo fue reiniciado."
+        : "El checkpoint del lugar objetivo todavía no necesitaba reiniciarse.",
   };
 }
