@@ -11,9 +11,9 @@ import {
   RECOMMENDATION_DWELL_CONFIG,
   RECOMMENDATION_EVENT_TYPES,
   RECOMMENDATION_PROFILE_DOCUMENT,
-} from "../../../config/recommendations/recommendationProfile.config.js";
+} from "../../../../config/recommendations/recommendationProfile.config.js";
 
-import applyRecommendationEventService from "../../recommendations/applyRecommendationEvent.service.js";
+import applyRecommendationEventService from "../../../recommendations/applyRecommendationEvent.service.js";
 
 const MIN_DWELL_SECONDS = 3;
 const MAX_DWELL_SECONDS = 30 * 60;
