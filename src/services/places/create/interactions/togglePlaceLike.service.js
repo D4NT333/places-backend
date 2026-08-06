@@ -5,11 +5,20 @@ import {
 
 import { db } from "../../../../config/firebase.js";
 
+import {
+  RECOMMENDATION_EVENT_TYPES,
+  RECOMMENDATION_PROFILE_DOCUMENT,
+} from "../../../../config/recommendations/recommendationProfile.config.js";
+
+import applyRecommendationEventService from "../../../recommendations/applyRecommendationEvent.service.js";
+
 import getPlaceMetricPeriod from "../../../../utils/getPlaceMetricPeriod.js";
 
 const PLACE_EVENT_TYPES = {
-  LIKE_ADDED: "place_like_added",
-  LIKE_REMOVED: "place_like_removed",
+  LIKE_ADDED:
+    RECOMMENDATION_EVENT_TYPES.LIKE_ADDED,
+  LIKE_REMOVED:
+    RECOMMENDATION_EVENT_TYPES.LIKE_REMOVED,
 };
 
 function createHttpError(message, statusCode) {
@@ -167,13 +176,25 @@ export default async function togglePlaceLikeService({
     .collection("places")
     .doc(normalizedPlaceId);
 
+  const userRef = db
+    .collection("user")
+    .doc(normalizedUid);
+
+  const profileRef = userRef
+    .collection(
+      RECOMMENDATION_PROFILE_DOCUMENT
+        .subcollection,
+    )
+    .doc(
+      RECOMMENDATION_PROFILE_DOCUMENT
+        .documentId,
+    );
+
   /*
    * Este documento es la fuente de verdad:
    * si existe, el usuario dio like.
    */
-  const userLikeRef = db
-    .collection("user")
-    .doc(normalizedUid)
+  const userLikeRef = userRef
     .collection("likedPlaces")
     .doc(normalizedPlaceId);
 
@@ -203,11 +224,15 @@ export default async function togglePlaceLikeService({
         userLikeSnapshot,
         interactionStateSnapshot,
         weeklyMetricSnapshot,
+        userSnapshot,
+        profileSnapshot,
       ] = await Promise.all([
         transaction.get(placeRef),
         transaction.get(userLikeRef),
         transaction.get(interactionStateRef),
         transaction.get(weeklyMetricRef),
+        transaction.get(userRef),
+        transaction.get(profileRef),
       ]);
 
       if (!placeSnapshot.exists) {
@@ -231,18 +256,58 @@ export default async function togglePlaceLikeService({
        */
       const liked = !userLikeSnapshot.exists;
 
+      const eventType = liked
+        ? PLACE_EVENT_TYPES.LIKE_ADDED
+        : PLACE_EVENT_TYPES.LIKE_REMOVED;
+
       const updatedLikesCount = liked
         ? currentLikesCount + 1
         : Math.max(currentLikesCount - 1, 0);
 
+      const previousLikeData =
+        userLikeSnapshot.exists
+          ? userLikeSnapshot.data()
+          : null;
+
+      const recommendation =
+        applyRecommendationEventService({
+          transaction,
+          profileRef,
+          profileSnapshot,
+          userData: userSnapshot.exists
+            ? userSnapshot.data()
+            : null,
+          uid: normalizedUid,
+          place: {
+            ...place,
+            placeId: normalizedPlaceId,
+          },
+          eventType,
+          eventId: eventRef.id,
+          reverseImpact:
+            previousLikeData
+              ?.recommendationImpact || null,
+          now,
+        });
+
       if (liked) {
-        transaction.set(userLikeRef, {
+        const likeData = {
           placeId: normalizedPlaceId,
           userId: normalizedUid,
 
           createdAt: now,
           updatedAt: now,
-        });
+        };
+
+        if (recommendation.impact) {
+          likeData.recommendationImpact =
+            recommendation.impact;
+        }
+
+        transaction.set(
+          userLikeRef,
+          likeData,
+        );
       } else {
         transaction.delete(userLikeRef);
       }
@@ -254,7 +319,6 @@ export default async function togglePlaceLikeService({
       transaction.update(placeRef, {
         "metrics.likesCount": updatedLikesCount,
 
-        
         updatedAt: now,
       });
 
@@ -271,11 +335,11 @@ export default async function togglePlaceLikeService({
           liked,
 
           lastLikeInteractionAt: now,
-         
 
           createdAt:
             interactionStateSnapshot.exists
-              ? interactionStateSnapshot.data()?.createdAt ?? now
+              ? interactionStateSnapshot.data()
+                  ?.createdAt ?? now
               : now,
 
           updatedAt: now,
@@ -331,9 +395,7 @@ export default async function togglePlaceLikeService({
         eventId: eventRef.id,
         placeId: normalizedPlaceId,
 
-        type: liked
-          ? PLACE_EVENT_TYPES.LIKE_ADDED
-          : PLACE_EVENT_TYPES.LIKE_REMOVED,
+        type: eventType,
 
         actor: {
           type: "user",
@@ -348,6 +410,12 @@ export default async function togglePlaceLikeService({
         metadata: {
           liked,
           likesCount: updatedLikesCount,
+          recommendationUpdated:
+            recommendation.updated,
+          recommendationApplied:
+            recommendation.applied || false,
+          recommendationTarget:
+            recommendation.target || null,
         },
 
         period: {
@@ -362,12 +430,23 @@ export default async function togglePlaceLikeService({
         liked,
         likesCount: updatedLikesCount,
 
-        eventType: liked
-          ? PLACE_EVENT_TYPES.LIKE_ADDED
-          : PLACE_EVENT_TYPES.LIKE_REMOVED,
+        eventType,
 
         weekId,
         dayId,
+
+        recommendation: {
+          updated: recommendation.updated,
+          applied: recommendation.applied,
+          reason: recommendation.reason,
+          target: recommendation.target || null,
+          dominantProfileId:
+            recommendation.dominantProfileId ||
+            null,
+          dominantSubprofileId:
+            recommendation
+              .dominantSubprofileId || null,
+        },
       };
     },
   );

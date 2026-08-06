@@ -1,11 +1,16 @@
-// src/services/places/interactions/registerPlaceView.service.js
-
 import {
   FieldValue,
   Timestamp,
 } from "firebase-admin/firestore";
 
 import { db } from "../../../../config/firebase.js";
+
+import {
+  RECOMMENDATION_EVENT_TYPES,
+  RECOMMENDATION_PROFILE_DOCUMENT,
+} from "../../../../config/recommendations/recommendationProfile.config.js";
+
+import applyRecommendationEventService from "../../../recommendations/applyRecommendationEvent.service.js";
 
 import getPlaceMetricPeriod from "../../../../utils/getPlaceMetricPeriod.js";
 
@@ -14,7 +19,7 @@ const VIEW_COOLDOWN_MILLISECONDS =
   VIEW_COOLDOWN_SECONDS * 1000;
 
 const PLACE_EVENT_TYPE = {
-  VIEW: "place_view",
+  VIEW: RECOMMENDATION_EVENT_TYPES.PLACE_VIEW,
 };
 
 function createHttpError(
@@ -188,6 +193,20 @@ export default async function registerPlaceViewService({
     .collection("places")
     .doc(normalizedPlaceId);
 
+  const userRef = db
+    .collection("user")
+    .doc(normalizedUid);
+
+  const profileRef = userRef
+    .collection(
+      RECOMMENDATION_PROFILE_DOCUMENT
+        .subcollection,
+    )
+    .doc(
+      RECOMMENDATION_PROFILE_DOCUMENT
+        .documentId,
+    );
+
   /*
    * Este documento servirá después para más interacciones,
    * no solamente para las vistas.
@@ -215,14 +234,19 @@ export default async function registerPlaceViewService({
       /*
        * Todas las lecturas ocurren antes de cualquier escritura.
        */
-      const placeSnapshot =
-        await transaction.get(placeRef);
-
-      const interactionStateSnapshot =
-        await transaction.get(interactionStateRef);
-
-      const weeklyMetricSnapshot =
-        await transaction.get(weeklyMetricRef);
+      const [
+        placeSnapshot,
+        interactionStateSnapshot,
+        weeklyMetricSnapshot,
+        userSnapshot,
+        profileSnapshot,
+      ] = await Promise.all([
+        transaction.get(placeRef),
+        transaction.get(interactionStateRef),
+        transaction.get(weeklyMetricRef),
+        transaction.get(userRef),
+        transaction.get(profileRef),
+      ]);
 
       if (!placeSnapshot.exists) {
         throw createHttpError(
@@ -291,6 +315,11 @@ export default async function registerPlaceViewService({
 
           weekId,
           dayId,
+
+          recommendation: {
+            updated: false,
+            reason: "view_cooldown",
+          },
         };
       }
 
@@ -301,7 +330,6 @@ export default async function registerPlaceViewService({
         "metrics.viewsCount":
           FieldValue.increment(1),
 
-        
         updatedAt: now,
       });
 
@@ -312,7 +340,6 @@ export default async function registerPlaceViewService({
           placeId: normalizedPlaceId,
 
           lastCountedViewAt: now,
-          
 
           countedViews:
             FieldValue.increment(1),
@@ -387,6 +414,24 @@ export default async function registerPlaceViewService({
         },
       );
 
+      const recommendation =
+        applyRecommendationEventService({
+          transaction,
+          profileRef,
+          profileSnapshot,
+          userData: userSnapshot.exists
+            ? userSnapshot.data()
+            : null,
+          uid: normalizedUid,
+          place: {
+            ...place,
+            placeId: normalizedPlaceId,
+          },
+          eventType: PLACE_EVENT_TYPE.VIEW,
+          eventId: eventRef.id,
+          now,
+        });
+
       return {
         counted: true,
 
@@ -397,6 +442,19 @@ export default async function registerPlaceViewService({
 
         weekId,
         dayId,
+
+        recommendation: {
+          updated: recommendation.updated,
+          applied: recommendation.applied,
+          reason: recommendation.reason,
+          target: recommendation.target || null,
+          dominantProfileId:
+            recommendation.dominantProfileId ||
+            null,
+          dominantSubprofileId:
+            recommendation
+              .dominantSubprofileId || null,
+        },
       };
     },
   );
