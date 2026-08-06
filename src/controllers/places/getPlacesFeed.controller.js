@@ -37,6 +37,11 @@ export default async function getPlacesFeedController(
         uid,
       });
 
+    console.log(
+      "[FEED PERSONALIZATION]",
+      result.personalization,
+    );
+
     return res
       .status(200)
       .json(result);
