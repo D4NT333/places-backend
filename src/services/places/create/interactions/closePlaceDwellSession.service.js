@@ -7,6 +7,14 @@ import { db } from "../../../../config/firebase.js";
 
 import getPlaceMetricPeriod from "../../../../utils/getPlaceMetricPeriod.js";
 
+import {
+  RECOMMENDATION_DWELL_CONFIG,
+  RECOMMENDATION_EVENT_TYPES,
+  RECOMMENDATION_PROFILE_DOCUMENT,
+} from "../../../config/recommendations/recommendationProfile.config.js";
+
+import applyRecommendationEventService from "../../recommendations/applyRecommendationEvent.service.js";
+
 const MIN_DWELL_SECONDS = 3;
 const MAX_DWELL_SECONDS = 30 * 60;
 
@@ -173,6 +181,20 @@ export default async function closePlaceDwellSessionService({
     .collection("places")
     .doc(normalizedPlaceId);
 
+  const userRef = db
+    .collection("user")
+    .doc(normalizedUid);
+
+  const profileRef = userRef
+    .collection(
+      RECOMMENDATION_PROFILE_DOCUMENT
+        .subcollection,
+    )
+    .doc(
+      RECOMMENDATION_PROFILE_DOCUMENT
+        .documentId,
+    );
+
   const sessionRef = placeRef
     .collection("dwellSessions")
     .doc(normalizedSessionId);
@@ -228,6 +250,11 @@ export default async function closePlaceDwellSessionService({
         capped: Boolean(session.capped),
 
         alreadyClosed: true,
+
+        recommendation: {
+          updated: false,
+          reason: "session_already_closed",
+        },
       };
     }
 
@@ -279,6 +306,17 @@ export default async function closePlaceDwellSessionService({
         : 0;
 
     /*
+     * Las métricas cuentan desde 3 segundos.
+     * El perfil solamente se modifica cuando la
+     * permanencia alcanza el mínimo configurado,
+     * que debe ser 30 segundos.
+     */
+    const recommendationCanBeApplied =
+      durationSeconds >=
+      RECOMMENDATION_DWELL_CONFIG
+        .minimumValidSeconds;
+
+    /*
      * La sesión se atribuye al día y semana en que comenzó.
      */
     const {
@@ -294,15 +332,32 @@ export default async function closePlaceDwellSessionService({
       .collection("weeklyMetrics")
       .doc(weekId);
 
-    const weeklyMetricSnapshot =
-      await transaction.get(
-        weeklyMetricRef,
-      );
+    /*
+     * Todas las lecturas se hacen antes
+     * de comenzar con las escrituras.
+     */
+    const [
+      placeSnapshot,
+      weeklyMetricSnapshot,
+      interactionStateSnapshot,
+      userSnapshot,
+      profileSnapshot,
+    ] = await Promise.all([
+      transaction.get(placeRef),
+      transaction.get(weeklyMetricRef),
+      transaction.get(interactionStateRef),
+      transaction.get(userRef),
+      transaction.get(profileRef),
+    ]);
 
-    const interactionStateSnapshot =
-      await transaction.get(
-        interactionStateRef,
+    if (!placeSnapshot.exists) {
+      throw createHttpError(
+        "El lugar solicitado no existe.",
+        404,
       );
+    }
+
+    const place = placeSnapshot.data();
 
     transaction.update(sessionRef, {
       status: "closed",
@@ -381,6 +436,11 @@ export default async function closePlaceDwellSessionService({
 
         weekId,
         dayId,
+
+        recommendation: {
+          updated: false,
+          reason: "dwell_too_short_for_metrics",
+        },
       };
     }
 
@@ -485,6 +545,49 @@ export default async function closePlaceDwellSessionService({
       );
     }
 
+    /*
+     * Solo las permanencias de 30 segundos o más
+     * actualizan el perfil del usuario.
+     */
+    const recommendation =
+      recommendationCanBeApplied
+        ? applyRecommendationEventService({
+            transaction,
+            profileRef,
+            profileSnapshot,
+
+            userData: userSnapshot.exists
+              ? userSnapshot.data()
+              : null,
+
+            uid: normalizedUid,
+
+            place: {
+              ...place,
+              placeId: normalizedPlaceId,
+            },
+
+            eventType:
+              RECOMMENDATION_EVENT_TYPES
+                .VALID_DWELL_SESSION,
+
+            eventId: eventRef.id,
+
+            now,
+          })
+        : {
+            updated: false,
+            applied: false,
+
+            reason:
+              "dwell_below_recommendation_minimum",
+
+            target: null,
+
+            dominantProfileId: null,
+            dominantSubprofileId: null,
+          };
+
     transaction.set(eventRef, {
       eventId: eventRef.id,
       placeId: normalizedPlaceId,
@@ -512,6 +615,9 @@ export default async function closePlaceDwellSessionService({
         countedDurationSeconds,
 
         capped,
+
+        recommendationEligible:
+          recommendationCanBeApplied,
       },
 
       period: {
@@ -523,7 +629,6 @@ export default async function closePlaceDwellSessionService({
     });
 
     transaction.update(placeRef, {
-      
       updatedAt: now,
     });
 
@@ -540,6 +645,31 @@ export default async function closePlaceDwellSessionService({
 
       weekId,
       dayId,
+
+      recommendation: {
+        updated:
+          recommendation.updated,
+
+        applied:
+          recommendation.applied,
+
+        reason:
+          recommendation.reason,
+
+        target:
+          recommendation.target ||
+          null,
+
+        dominantProfileId:
+          recommendation
+            .dominantProfileId ||
+          null,
+
+        dominantSubprofileId:
+          recommendation
+            .dominantSubprofileId ||
+          null,
+      },
     };
   });
 }
