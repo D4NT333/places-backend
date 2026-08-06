@@ -11,19 +11,29 @@ export default async function getPlacesFeedController(
       longitude,
       limit,
       cursor,
+
+      categoryKey,
+      subtags,
+      approaches,
+      priceIndex,
+      isFree,
+      openNow,
     } = req.query;
 
     const uid =
-      typeof req.user?.uid === "string"
+      typeof req.user?.uid ===
+      "string"
         ? req.user.uid.trim()
         : "";
 
     if (!uid) {
-      const error = new Error(
-        "El usuario autenticado es obligatorio para generar el feed.",
-      );
+      const error =
+        new Error(
+          "El usuario autenticado es obligatorio para generar el feed.",
+        );
 
-      error.statusCode = 401;
+      error.statusCode =
+        401;
 
       throw error;
     }
@@ -35,12 +45,16 @@ export default async function getPlacesFeedController(
         limit,
         cursor,
         uid,
-      });
 
-    console.log(
-      "[FEED PERSONALIZATION]",
-      result.personalization,
-    );
+        filters: {
+          categoryKey,
+          subtags,
+          approaches,
+          priceIndex,
+          isFree,
+          openNow,
+        },
+      });
 
     return res
       .status(200)

@@ -1086,12 +1086,257 @@ async function getUserRecommendationProfile(
   return profileSnapshot.data();
 }
 
+function normalizeBoolean(
+  value,
+) {
+  return (
+    value === true ||
+    value === "true" ||
+    value === "1"
+  );
+}
+
+function normalizeCsvValues(
+  value,
+) {
+  if (
+    typeof value !== "string"
+  ) {
+    return [];
+  }
+
+  return value
+    .split(",")
+    .map(
+      (
+        item,
+      ) =>
+        cleanText(
+          item,
+        ),
+    )
+    .filter(
+      Boolean,
+    );
+}
+
+function normalizeFilterValue(
+  value,
+) {
+  return cleanText(
+    value,
+  )
+    .normalize("NFD")
+    .replace(
+      /[\u0300-\u036f]/g,
+      "",
+    )
+    .toLowerCase()
+    .replace(
+      /&/g,
+      " y ",
+    )
+    .replace(
+      /[^a-z0-9]+/g,
+      "_",
+    )
+    .replace(
+      /^_+|_+$/g,
+      "",
+    )
+    .replace(
+      /_+/g,
+      "_",
+    )
+    .replace(
+      /^subtag_/,
+      "",
+    )
+    .replace(
+      /^approach_/,
+      "",
+    )
+    .replace(
+      /^tag_/,
+      "",
+    );
+}
+
+function hasAnyFilterMatch(
+  placeValues,
+  requestedValues,
+) {
+  if (
+    requestedValues.length ===
+    0
+  ) {
+    return true;
+  }
+
+  const normalizedPlaceValues =
+    new Set(
+      normalizeStringArray(
+        placeValues,
+      )
+        .map(
+          normalizeFilterValue,
+        )
+        .filter(
+          Boolean,
+        ),
+    );
+
+  return requestedValues.some(
+    (
+      requestedValue,
+    ) =>
+      normalizedPlaceValues.has(
+        normalizeFilterValue(
+          requestedValue,
+        ),
+      ),
+  );
+}
+
+function filterCandidatesByFeedFilters({
+  candidates,
+  filters,
+}) {
+  if (
+    !filters ||
+    typeof filters !== "object"
+  ) {
+    return candidates;
+  }
+
+  const requestedCategory =
+    normalizeFilterValue(
+      filters.categoryKey,
+    );
+
+  const requestedSubtags =
+    normalizeCsvValues(
+      filters.subtags,
+    );
+
+  const requestedApproaches =
+    normalizeCsvValues(
+      filters.approaches,
+    );
+
+  const requestedPriceIndex =
+    Number(
+      filters.priceIndex,
+    );
+
+  const requiresFree =
+    normalizeBoolean(
+      filters.isFree,
+    );
+
+  const requiresOpenNow =
+    normalizeBoolean(
+      filters.openNow,
+    );
+
+  return candidates.filter(
+    (
+      candidate,
+    ) => {
+      const place =
+        candidate.document.data();
+
+      if (
+        requestedCategory &&
+        normalizeFilterValue(
+          place?.tagId,
+        ) !==
+          requestedCategory
+      ) {
+        return false;
+      }
+
+      if (
+        !hasAnyFilterMatch(
+          place?.subtags,
+          requestedSubtags,
+        )
+      ) {
+        return false;
+      }
+
+      if (
+        !hasAnyFilterMatch(
+          place?.approaches,
+          requestedApproaches,
+        )
+      ) {
+        return false;
+      }
+
+      if (requiresFree) {
+        const priceId =
+          normalizeFilterValue(
+            place?.priceRangeId,
+          );
+
+        const isFreePlace =
+          place?.isFree === true ||
+          priceId === "free" ||
+          priceId === "gratis" ||
+          priceId === "r0";
+
+        if (!isFreePlace) {
+          return false;
+        }
+      } else if (
+        Number.isFinite(
+          requestedPriceIndex,
+        ) &&
+        requestedPriceIndex >
+          0
+      ) {
+        const placePriceIndex =
+          Number(
+            cleanText(
+              place?.priceRangeId,
+            ).replace(
+              /^r/i,
+              "",
+            ),
+          );
+
+        if (
+          !Number.isFinite(
+            placePriceIndex,
+          ) ||
+          placePriceIndex >
+            requestedPriceIndex
+        ) {
+          return false;
+        }
+      }
+
+      if (
+        requiresOpenNow &&
+        place?.openingHours
+          ?.isOpenNow !== true
+      ) {
+        return false;
+      }
+
+      return true;
+    },
+  );
+}
+
 export default async function getPlacesFeedService({
   latitude,
   longitude,
   limit,
   cursor,
   uid,
+  filters,
 } = {}) {
   const normalizedLatitude =
     normalizeCoordinate(
@@ -1177,8 +1422,16 @@ if (!normalizedUid) {
       distanceCandidates,
     );
 
-  const totalAvailable =
-  candidatesInsideRadius.length;
+  const filteredCandidates =
+  filterCandidatesByFeedFilters({
+    candidates:
+      candidatesInsideRadius,
+
+    filters,
+  });
+
+const totalAvailable =
+  filteredCandidates.length;
 
 const recommendationProfile =
   await getUserRecommendationProfile(
@@ -1188,7 +1441,7 @@ const recommendationProfile =
 const personalizedCandidates =
   buildPersonalizedFeedOrderService({
     candidates:
-      candidatesInsideRadius,
+      filteredCandidates,
 
     recommendationProfile,
   });
